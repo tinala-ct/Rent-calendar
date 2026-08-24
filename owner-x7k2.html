@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rent Tracker — สำหรับเจ้าของบ้าน</title>
+  <meta name="description" content="ระบบจัดการบิลค่าเช่าและค่าใช้จ่ายประจำบ้านเช่าสำหรับเจ้าของบ้าน">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Top Header -->
+    <header class="app-header">
+      <div>
+        <h1>Rent Tracker <span class="role-badge" style="background-color:#FEF3C7; color:#B45309;">เจ้าของบ้าน</span></h1>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div class="month-selector">
+          <button id="prevMonthBtn" aria-label="เดือนก่อนหน้า">‹</button>
+          <span id="monthYearLabel">สิงหาคม 2569</span>
+          <button id="nextMonthBtn" aria-label="เดือนถัดไป">›</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="settingsBtn" title="ตั้งค่าบัญชี" style="padding:6px 10px;">⚙️</button>
+      </div>
+    </header>
+
+    <!-- App Main Body -->
+    <main class="app-content">
+
+      <!-- Owner Control Dashboard Card -->
+      <section class="summary-card" style="background: linear-gradient(135deg, #1E293B 0%, #334155 100%);">
+        <div class="summary-header">
+          <span>ภาพรวมรายรับเดือนนี้</span>
+          <span style="font-size:0.75rem; background:rgba(255,255,255,0.15); padding:2px 8px; border-radius:12px;">Admin Mode</span>
+        </div>
+        <div class="summary-amount" id="summaryTotalAmount">฿0</div>
+        
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="summaryProgressBar" style="width: 0%;"></div>
+        </div>
+
+        <div class="summary-stats">
+          <span>ชำระแล้ว: <strong id="summaryPaidAmount">฿0</strong> (<span id="summaryStatPaid">0</span>)</span>
+          <span>ยังไม่ชำระ: <strong id="summaryStatPending">0 รายการ</strong></span>
+        </div>
+      </section>
+
+      <!-- Quick Action Buttons for Owner -->
+      <section style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <button class="btn btn-primary" id="generateMonthBillsBtn" style="background-color:#059669;">
+          ⚡ สร้างบิลเดือนนี้อัตโนมัติ
+        </button>
+        <button class="btn btn-secondary" id="addBillBtn">
+          ➕ เพิ่มบิลใหม่
+        </button>
+      </section>
+
+      <!-- Calendar Section -->
+      <section>
+        <div class="section-title">
+          <span>📅 ปฏิทินรับชำระ</span>
+          <span style="font-size:0.75rem; color:var(--text-muted);">แตะวันที่เพื่อกรอง</span>
+        </div>
+
+        <div class="calendar-card" style="margin-top: 10px;">
+          <div class="calendar-days-header">
+            <span>อา</span><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid">
+            <!-- Rendered by app.js -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Bills List Section -->
+      <section>
+        <div class="section-title">
+          <span>📋 รายการบิลและการตรวจสอบสลิป</span>
+        </div>
+
+        <div class="bills-list" id="billsList" style="margin-top: 10px;">
+          <!-- Rendered by app.js -->
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Modal: Add/Edit Bill (Owner) -->
+  <div class="modal-backdrop" id="billModal">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2 id="billModalTitle">เพิ่มรายการบิลใหม่</h2>
+        <button class="btn-close" id="closeBillModalBtn">✕</button>
+      </div>
+
+      <form id="billForm">
+        <input type="hidden" id="billIdInput">
+
+        <div class="form-group">
+          <label>ประเภทค่าใช้จ่าย</label>
+          <select class="form-control" id="billTypeSelect" required>
+            <option value="rent">ค่าเช่าบ้าน (Rent)</option>
+            <option value="common_fee">ค่าส่วนกลาง + ค่าน้ำ (Common Fee)</option>
+            <option value="electricity">ค่าไฟฟ้า (Electricity)</option>
+            <option value="internet">ค่าอินเทอร์เน็ต (Internet)</option>
+            <option value="pool_cleaning">ค่าทำความสะอาดสระว่ายน้ำ (Pool Cleaning)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>ชื่อรายการบิล</label>
+          <input type="text" class="form-control" id="billTitleInput" placeholder="เช่น ค่าไฟฟ้าประจำเดือน ส.ค." required>
+        </div>
+
+        <div class="form-group">
+          <label>จำนวนเงิน (บาท)</label>
+          <input type="number" class="form-control" id="billAmountInput" placeholder="0" min="0" required>
+        </div>
+
+        <div class="form-group">
+          <label>วันครบกำหนดชำระ</label>
+          <input type="date" class="form-control" id="billDueDateInput" required>
+        </div>
+
+        <div class="form-group">
+          <label>สถานะ</label>
+          <select class="form-control" id="billStatusSelect" required>
+            <option value="pending">รอชำระ (Pending)</option>
+            <option value="paid">ชำระแล้ว (Paid)</option>
+            <option value="overdue">เกินกำหนด (Overdue)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>หมายเหตุเพิ่มเติม (ถ้ามี)</label>
+          <input type="text" class="form-control" id="billNoteInput" placeholder="เช่น ปรับยอดตามหน่วยมิเตอร์จริง">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px;">
+          💾 บันทึกบิล
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Settings (Owner) -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>ตั้งค่าบัญชีรับโอนเงิน</h2>
+        <button class="btn-close" id="closeSettingsModalBtn">✕</button>
+      </div>
+
+      <form id="settingsForm">
+        <div class="form-group">
+          <label>ชื่อธนาคาร</label>
+          <input type="text" class="form-control" id="settingBankName" placeholder="เช่น กสิกรไทย (KBank)" required>
+        </div>
+
+        <div class="form-group">
+          <label>เลขที่บัญชี</label>
+          <input type="text" class="form-control" id="settingAccountNo" placeholder="XXX-X-XXXXX-X" required>
+        </div>
+
+        <div class="form-group">
+          <label>ชื่อบัญชี</label>
+          <input type="text" class="form-control" id="settingAccountName" placeholder="นาย..." required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px;">
+          💾 บันทึกการตั้งค่า
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lightbox Modal for Slip Zoom -->
+  <div class="lightbox-modal" id="lightboxModal">
+    <button class="lightbox-close" id="closeLightboxBtn">✕</button>
+    <img class="lightbox-img" id="lightboxImg" src="" alt="สลิปโอนเงิน">
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

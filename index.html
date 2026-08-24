@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rent Tracker — สำหรับผู้เช่า</title>
+  <meta name="description" content="ระบบติดตามการจ่ายค่าเช่าและค่าใช้จ่ายประจำเดือนสำหรับผู้เช่า">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Top Header -->
+    <header class="app-header">
+      <div>
+        <h1>Rent Tracker <span class="role-badge">ผู้เช่า</span></h1>
+      </div>
+      <div class="month-selector">
+        <button id="prevMonthBtn" aria-label="เดือนก่อนหน้า">‹</button>
+        <span id="monthYearLabel">สิงหาคม 2569</span>
+        <button id="nextMonthBtn" aria-label="เดือนถัดไป">›</button>
+      </div>
+    </header>
+
+    <!-- App Main Body -->
+    <main class="app-content">
+
+      <!-- Monthly Summary Card -->
+      <section class="summary-card">
+        <div class="summary-header">
+          <span>ยอดรวมค่าใช้จ่ายเดือนนี้</span>
+          <span style="font-size:0.75rem; background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:12px;">ประจำเดือน</span>
+        </div>
+        <div class="summary-amount" id="summaryTotalAmount">฿0</div>
+        
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="summaryProgressBar" style="width: 0%;"></div>
+        </div>
+
+        <div class="summary-stats">
+          <span>ชำระแล้ว: <strong id="summaryPaidAmount">฿0</strong></span>
+          <span>ค้างชำระ: <strong id="summaryStatPending">0 รายการ</strong></span>
+        </div>
+      </section>
+
+      <!-- Bank Transfer Details Card -->
+      <section class="bank-card">
+        <div class="bank-info">
+          <div class="bank-icon">KB</div>
+          <div class="bank-details">
+            <h4 id="bankName">กสิกรไทย (KBank)</h4>
+            <div class="account-number" id="bankAccountNo">123-4-56789-0</div>
+            <div class="account-name" id="bankAccountName">นายเจ้าของ บ้านเช่า</div>
+          </div>
+        </div>
+        <button class="btn-copy" id="copyBankBtn" aria-label="คัดลอกเลขบัญชี">
+          📋 คัดลอก
+        </button>
+      </section>
+
+      <!-- Calendar Section -->
+      <section>
+        <div class="section-title">
+          <span>📅 ปฏิทินกำหนดชำระ</span>
+          <span style="font-size:0.75rem; color:var(--text-muted);">แตะวันที่เพื่อกรองบิล</span>
+        </div>
+
+        <div class="calendar-card" style="margin-top: 10px;">
+          <div class="calendar-days-header">
+            <span>อา</span><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid">
+            <!-- Rendered by app.js -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Bills List Section -->
+      <section>
+        <div class="section-title">
+          <span>🧾 รายการบิลเดือนนี้</span>
+        </div>
+
+        <div class="bills-list" id="billsList" style="margin-top: 10px;">
+          <!-- Rendered by app.js -->
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Pay Modal (Tenant Slip Upload) -->
+  <div class="modal-backdrop" id="payModal">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2 id="payModalTitle">แจ้งชำระเงิน</h2>
+        <button class="btn-close" id="closePayModalBtn">✕</button>
+      </div>
+
+      <div style="text-align:center; margin-bottom:16px;">
+        <span style="font-size:0.9rem; color:var(--text-secondary);">ยอดที่ต้องชำระ:</span>
+        <div style="font-size:1.8rem; font-weight:700; color:var(--primary);" id="payModalAmount">฿0</div>
+      </div>
+
+      <form id="payForm">
+        <div class="form-group">
+          <label>แนบสลิปโอนเงิน</label>
+          <div class="file-upload-box">
+            <span style="font-size:2rem;">📸</span>
+            <p style="font-size:0.85rem; font-weight:600; margin-top:4px;">แตะเพื่อเลือกรูปสลิป</p>
+            <p style="font-size:0.75rem; color:var(--text-muted);">รองรับไฟล์ภาพ JPG, PNG</p>
+            <input type="file" id="slipInput" accept="image/*" required>
+          </div>
+        </div>
+
+        <div class="slip-preview-container" id="slipPreviewContainer" style="display:none;">
+          <img id="slipPreviewImg" src="" alt="ตัวอย่างสลิป">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" style="margin-top:18px;">
+          ✓ ยืนยันการแจ้งชำระเงิน
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lightbox Modal for Slip Zoom -->
+  <div class="lightbox-modal" id="lightboxModal">
+    <button class="lightbox-close" id="closeLightboxBtn">✕</button>
+    <img class="lightbox-img" id="lightboxImg" src="" alt="สลิปโอนเงิน">
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
