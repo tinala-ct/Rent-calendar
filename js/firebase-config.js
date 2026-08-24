@@ -9,12 +9,12 @@ const DEFAULT_SETTINGS = {
   bankAccountNo: '123-4-56789-0',
   bankAccountName: 'นายเจ้าของ บ้านเช่า',
   firebaseConfig: {
-    apiKey: "",
-    authDomain: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: ""
+    apiKey: "AIzaSyAsM7qjSs0Mpbp_RWsN2xj-fZD0MILOPpA",
+    authDomain: "rent-calendar-ab918.firebaseapp.com",
+    projectId: "rent-calendar-ab918",
+    storageBucket: "rent-calendar-ab918.firebasestorage.app",
+    messagingSenderId: "971964703634",
+    appId: "1:971964703634:web:874d959a3e9673110e174b"
   }
 };
 
@@ -113,7 +113,12 @@ class DataService {
   getSettings() {
     try {
       const data = localStorage.getItem(this.settingsKey);
-      return data ? JSON.parse(data) : DEFAULT_SETTINGS;
+      if (!data) return DEFAULT_SETTINGS;
+      const parsed = JSON.parse(data);
+      if (!parsed.firebaseConfig || !parsed.firebaseConfig.apiKey) {
+        parsed.firebaseConfig = DEFAULT_SETTINGS.firebaseConfig;
+      }
+      return parsed;
     } catch (e) {
       return DEFAULT_SETTINGS;
     }
