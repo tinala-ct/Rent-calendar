@@ -1,24 +1,24 @@
 /**
  * Firebase Config & Data Management Layer
- * Support Firebase Firestore real-time cloud database with auto-fallback to LocalStorage for offline/demo usage
+ * Support Firebase Firestore real-time cloud database with auto-fallback to LocalStorage
  */
 
-// Default Bank Info & Settings
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAsM7qjSs0Mpbp_RWsN2xj-fZD0MILOPpA",
+  authDomain: "rent-calendar-ab918.firebaseapp.com",
+  projectId: "rent-calendar-ab918",
+  storageBucket: "rent-calendar-ab918.firebasestorage.app",
+  messagingSenderId: "971964703634",
+  appId: "1:971964703634:web:874d959a3e9673110e174b"
+};
+
 const DEFAULT_SETTINGS = {
   bankName: 'กสิกรไทย (KBank)',
   bankAccountNo: '123-4-56789-0',
   bankAccountName: 'นายเจ้าของ บ้านเช่า',
-  firebaseConfig: {
-    apiKey: "AIzaSyAsM7qjSs0Mpbp_RWsN2xj-fZD0MILOPpA",
-    authDomain: "rent-calendar-ab918.firebaseapp.com",
-    projectId: "rent-calendar-ab918",
-    storageBucket: "rent-calendar-ab918.firebasestorage.app",
-    messagingSenderId: "971964703634",
-    appId: "1:971964703634:web:874d959a3e9673110e174b"
-  }
+  firebaseConfig: FIREBASE_CONFIG
 };
 
-// Initial Seed Data for Instant Preview
 const SEED_BILLS = [
   {
     id: 'bill-rent-aug',
@@ -97,10 +97,9 @@ class DataService {
 
   initFirebase() {
     try {
-      const settings = this.getSettings();
-      if (typeof firebase !== 'undefined' && settings.firebaseConfig && settings.firebaseConfig.apiKey) {
+      if (typeof window.firebase !== 'undefined' && FIREBASE_CONFIG.apiKey) {
         if (!firebase.apps.length) {
-          firebase.initializeApp(settings.firebaseConfig);
+          firebase.initializeApp(FIREBASE_CONFIG);
         }
         this.db = firebase.firestore();
         console.log('Firebase Firestore Initialized Successfully');
@@ -114,10 +113,7 @@ class DataService {
     try {
       const data = localStorage.getItem(this.settingsKey);
       let parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
-      // Always override with default hardcoded keys if provided
-      if (DEFAULT_SETTINGS.firebaseConfig && DEFAULT_SETTINGS.firebaseConfig.apiKey) {
-        parsed.firebaseConfig = DEFAULT_SETTINGS.firebaseConfig;
-      }
+      parsed.firebaseConfig = FIREBASE_CONFIG;
       return parsed;
     } catch (e) {
       return DEFAULT_SETTINGS;
@@ -125,12 +121,11 @@ class DataService {
   }
 
   saveSettings(settings) {
+    settings.firebaseConfig = FIREBASE_CONFIG;
     localStorage.setItem(this.settingsKey, JSON.stringify(settings));
-    this.initFirebase();
   }
 
   async getBills() {
-    // 1. Try Firebase Firestore if configured
     if (this.db) {
       try {
         const snapshot = await this.db.collection('bills').get();
@@ -140,7 +135,6 @@ class DataService {
           localStorage.setItem(this.storageKey, JSON.stringify(cloudBills));
           return cloudBills;
         } else {
-          // Firestore is empty! Seed initial data to Cloud Firestore automatically
           console.log('Seeding initial bills into Firestore Cloud Database...');
           for (const bill of SEED_BILLS) {
             await this.db.collection('bills').doc(bill.id).set(bill);
@@ -153,7 +147,6 @@ class DataService {
       }
     }
 
-    // 2. Fallback to LocalStorage
     try {
       return JSON.parse(localStorage.getItem(this.storageKey) || '[]');
     } catch (e) {
@@ -166,7 +159,6 @@ class DataService {
       billData.id = 'bill-' + Date.now();
     }
 
-    // Save to Firestore if connected
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billData.id).set(billData, { merge: true });
@@ -176,7 +168,6 @@ class DataService {
       }
     }
 
-    // Save to LocalStorage
     const bills = await this.getBills();
     const index = bills.findIndex(b => b.id === billData.id);
     if (index !== -1) {

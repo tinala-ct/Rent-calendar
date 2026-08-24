@@ -569,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     } catch(e) {
-      console.warn('Realtime listener error:', e);
+      console.warn('Firestore realtime listener error:', e);
     }
   }
 });
