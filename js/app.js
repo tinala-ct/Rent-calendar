@@ -4,34 +4,35 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   const isOwnerPage = window.location.pathname.includes('owner-x7k2');
-  
+
   // State
-  let currentDate = new Date(2026, 7, 1); // Default Aug 2026 as per spec
+  let currentDate = new Date(2026, 7, 1); // Aug 2026
   let bills = [];
   let selectedDate = null;
   let activeBillForPay = null;
+  let recurringTemplates = [];
 
-  // DOM Elements
+  // DOM Elements — Common
   const monthYearLabel = document.getElementById('monthYearLabel');
   const prevMonthBtn = document.getElementById('prevMonthBtn');
   const nextMonthBtn = document.getElementById('nextMonthBtn');
   const calendarGrid = document.getElementById('calendarGrid');
   const billsList = document.getElementById('billsList');
 
-  // Summary Elements
+  // Summary
   const summaryTotalAmount = document.getElementById('summaryTotalAmount');
   const summaryPaidAmount = document.getElementById('summaryPaidAmount');
   const summaryProgressBar = document.getElementById('summaryProgressBar');
   const summaryStatPaid = document.getElementById('summaryStatPaid');
   const summaryStatPending = document.getElementById('summaryStatPending');
 
-  // Bank Info Elements (Tenant)
+  // Bank Info (Tenant)
   const bankNameEl = document.getElementById('bankName');
   const bankAccountNoEl = document.getElementById('bankAccountNo');
   const bankAccountNameEl = document.getElementById('bankAccountName');
   const copyBankBtn = document.getElementById('copyBankBtn');
 
-  // Modals
+  // Pay Modal
   const payModal = document.getElementById('payModal');
   const closePayModalBtn = document.getElementById('closePayModalBtn');
   const payForm = document.getElementById('payForm');
@@ -39,27 +40,44 @@ document.addEventListener('DOMContentLoaded', () => {
   const slipPreviewContainer = document.getElementById('slipPreviewContainer');
   const slipPreviewImg = document.getElementById('slipPreviewImg');
 
-  // Lightbox Modal
+  // Lightbox
   const lightboxModal = document.getElementById('lightboxModal');
   const lightboxImg = document.getElementById('lightboxImg');
   const closeLightboxBtn = document.getElementById('closeLightboxBtn');
 
-  // Owner Modals & Buttons
+  // Owner Modals
   const addBillBtn = document.getElementById('addBillBtn');
   const generateMonthBillsBtn = document.getElementById('generateMonthBillsBtn');
   const settingsBtn = document.getElementById('settingsBtn');
-
   const billModal = document.getElementById('billModal');
   const closeBillModalBtn = document.getElementById('closeBillModalBtn');
   const billForm = document.getElementById('billForm');
-
   const settingsModal = document.getElementById('settingsModal');
   const closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn');
   const settingsForm = document.getElementById('settingsForm');
 
+  // Recurring Templates Modal
+  const recurringBtn = document.getElementById('recurringBtn');
+  const recurringModal = document.getElementById('recurringModal');
+  const closeRecurringModalBtn = document.getElementById('closeRecurringModalBtn');
+  const recurringListView = document.getElementById('recurringListView');
+  const recurringFormView = document.getElementById('recurringFormView');
+  const addRecurringBtn = document.getElementById('addRecurringBtn');
+  const backToRecurringListBtn = document.getElementById('backToRecurringListBtn');
+  const recurringTemplateForm = document.getElementById('recurringTemplateForm');
+  const recurringTmplFrequency = document.getElementById('recurringTmplFrequency');
+  const anchorMonthGroup = document.getElementById('anchorMonthGroup');
+
+  // ─── Constants ──────────────────────────────────────────────────────────────
+
   const THAI_MONTHS = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
+
+  const THAI_MONTHS_SHORT = [
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
   ];
 
   const TYPE_NAMES = {
@@ -67,7 +85,9 @@ document.addEventListener('DOMContentLoaded', () => {
     common_fee: 'ค่าส่วนกลาง',
     electricity: 'ค่าไฟฟ้า',
     internet: 'ค่าอินเทอร์เน็ต',
-    pool_cleaning: 'ค่าทำสระว่ายน้ำ'
+    pool_cleaning: 'ค่าทำสระว่ายน้ำ',
+    garbage: 'ค่าเก็บขยะ',
+    other: 'อื่นๆ'
   };
 
   const TYPE_ICONS = {
@@ -75,220 +95,41 @@ document.addEventListener('DOMContentLoaded', () => {
     common_fee: '🏢',
     electricity: '⚡',
     internet: '🌐',
-    pool_cleaning: '🏊'
+    pool_cleaning: '🏊',
+    garbage: '🗑️',
+    other: '📄'
   };
 
-  // Helper Toast
-  window.showToast = function(message) {
+  const FREQ_LABELS = {
+    monthly: 'ทุกเดือน',
+    every3months: 'ทุก 3 เดือน',
+    every6months: 'ทุก 6 เดือน',
+    yearly: 'ปีละครั้ง'
+  };
+
+  // ─── Toast Helper ──────────────────────────────────────────────────────────
+
+  window.showToast = function (message, isError = false) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = `<span>✅</span> <span>${message}</span>`;
+    if (isError) toast.style.background = 'rgba(185,28,28,0.92)';
+    toast.innerHTML = `<span>${isError ? '⚠️' : '✅'}</span> <span>${message}</span>`;
     container.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
       toast.style.transition = 'opacity 0.3s ease';
       setTimeout(() => toast.remove(), 300);
-    }, 2500);
+    }, 2800);
   };
 
-  // Format Currency
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
   function formatCurrency(amount) {
-    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(amount);
-  }
-
-  // Load Bank Settings
-  async function loadBankSettings() {
-    const settings = await window.dataService.getSettings();
-    if (bankNameEl) bankNameEl.textContent = settings.bankName;
-    if (bankAccountNoEl) bankAccountNoEl.textContent = settings.bankAccountNo;
-    if (bankAccountNameEl) bankAccountNameEl.textContent = settings.bankAccountName;
-  }
-
-  // Render Header Month
-  function updateMonthHeader() {
-    const month = currentDate.getMonth();
-    const yearStr = (currentDate.getFullYear() + 543); // Thai BE year
-    monthYearLabel.textContent = `${THAI_MONTHS[month]} ${yearStr}`;
-  }
-
-  // Refresh All UI
-  async function refreshData() {
-    bills = await window.dataService.getBills();
-    renderSummary();
-    renderCalendar();
-    renderBillsList();
-  }
-
-  // Calculate & Render Summary
-  function renderSummary() {
-    const year = currentDate.getFullYear();
-    const monthStr = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const prefix = `${year}-${monthStr}`;
-
-    const monthBills = bills.filter(b => b.dueDate.startsWith(prefix));
-    
-    const total = monthBills.reduce((sum, b) => sum + Number(b.amount), 0);
-    const paid = monthBills.filter(b => b.status === 'paid').reduce((sum, b) => sum + Number(b.amount), 0);
-    const pendingCount = monthBills.filter(b => b.status !== 'paid').length;
-    const paidCount = monthBills.filter(b => b.status === 'paid').length;
-
-    if (summaryTotalAmount) summaryTotalAmount.textContent = formatCurrency(total);
-    if (summaryPaidAmount) summaryPaidAmount.textContent = formatCurrency(paid);
-    
-    if (summaryProgressBar) {
-      const percentage = total > 0 ? (paid / total) * 100 : 0;
-      summaryProgressBar.style.width = `${percentage}%`;
-    }
-
-    if (summaryStatPaid) summaryStatPaid.textContent = `${paidCount} รายการ`;
-    if (summaryStatPending) summaryStatPending.textContent = `${pendingCount} รายการ`;
-  }
-
-  // Render Calendar Grid
-  function renderCalendar() {
-    if (!calendarGrid) return;
-    calendarGrid.innerHTML = '';
-
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-
-    const firstDayIndex = new Date(year, month, 1).getDay();
-    const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
-    const prevMonthLastDate = new Date(year, month, 0).getDate();
-
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
-    // Previous Month Fillers
-    for (let x = firstDayIndex; x > 0; x--) {
-      const dayNum = prevMonthLastDate - x + 1;
-      const cell = document.createElement('div');
-      cell.className = 'calendar-cell other-month';
-      cell.innerHTML = `<span class="calendar-date-number">${dayNum}</span>`;
-      calendarGrid.appendChild(cell);
-    }
-
-    // Current Month Days
-    for (let day = 1; day <= lastDateOfMonth; day++) {
-      const dayStr = String(day).padStart(2, '0');
-      const monthStr = String(month + 1).padStart(2, '0');
-      const dateKey = `${year}-${monthStr}-${dayStr}`;
-
-      const cell = document.createElement('div');
-      cell.className = 'calendar-cell';
-      if (dateKey === todayStr) cell.classList.add('today');
-      if (selectedDate === dateKey) cell.classList.add('selected');
-
-      cell.innerHTML = `<span class="calendar-date-number">${day}</span>`;
-
-      // Filter bills on this day
-      const dayBills = bills.filter(b => b.dueDate === dateKey);
-
-      if (dayBills.length > 0) {
-        const dotsContainer = document.createElement('div');
-        dotsContainer.className = 'calendar-dots';
-
-        dayBills.forEach(b => {
-          const dot = document.createElement('div');
-          let dotClass = `dot dot-${b.type.replace('_cleaning', '').replace('_fee', '')}`;
-          if (b.status === 'paid') dotClass += ' dot-paid';
-          dot.className = dotClass;
-          dot.title = `${b.title} (${b.amount} บ.)`;
-          dotsContainer.appendChild(dot);
-        });
-
-        cell.appendChild(dotsContainer);
-      }
-
-      cell.addEventListener('click', () => {
-        if (selectedDate === dateKey) {
-          selectedDate = null; // Toggle filter off
-        } else {
-          selectedDate = dateKey;
-        }
-        renderCalendar();
-        renderBillsList();
-      });
-
-      calendarGrid.appendChild(cell);
-    }
-  }
-
-  // Render Bills Cards List
-  function renderBillsList() {
-    if (!billsList) return;
-    billsList.innerHTML = '';
-
-    const year = currentDate.getFullYear();
-    const monthStr = String(currentDate.getMonth() + 1).padStart(2, '0');
-
-    let displayBills = bills.filter(b => b.dueDate.startsWith(`${year}-${monthStr}`));
-
-    // If date selected on calendar, filter by date
-    if (selectedDate) {
-      displayBills = displayBills.filter(b => b.dueDate === selectedDate);
-    }
-
-    // Sort by Due Date asc
-    displayBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-    if (displayBills.length === 0) {
-      billsList.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📋</div>
-          <p>${selectedDate ? 'ไม่มีบิลที่ต้องชำระในวันนี้' : 'ไม่มีรายการบิลในเดือนนี้'}</p>
-        </div>
-      `;
-      return;
-    }
-
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    displayBills.forEach(bill => {
-      // Determine status auto if pending but past due date
-      let currentStatus = bill.status;
-      if (currentStatus === 'pending' && bill.dueDate < todayStr) {
-        currentStatus = 'overdue';
-      }
-
-      const statusLabels = {
-        paid: 'จ่ายแล้ว',
-        pending: 'รอชำระ',
-        overdue: 'เกินกำหนด'
-      };
-
-      const card = document.createElement('div');
-      card.className = `bill-card type-${bill.type}`;
-      card.innerHTML = `
-        <div class="bill-main-info">
-          <div class="bill-left">
-            <div class="bill-icon-box type-${bill.type}">
-              ${TYPE_ICONS[bill.type] || '📄'}
-            </div>
-            <div class="bill-details">
-              <h3>${bill.title}</h3>
-              <p>ครบกำหนด: ${formatThaiDate(bill.dueDate)}</p>
-            </div>
-          </div>
-          <div class="bill-right">
-            <div class="bill-amount">${formatCurrency(bill.amount)}</div>
-            <span class="bill-status-tag status-${currentStatus}">${statusLabels[currentStatus]}</span>
-          </div>
-        </div>
-
-        ${bill.note ? `<div class="bill-note">💬 ${bill.note}</div>` : ''}
-
-        <div class="bill-actions">
-          ${renderCardButtons(bill, isOwnerPage)}
-        </div>
-      `;
-
-      billsList.appendChild(card);
-    });
-
-    attachBillCardEvents();
+    return new Intl.NumberFormat('th-TH', {
+      style: 'currency', currency: 'THB', maximumFractionDigits: 0
+    }).format(amount);
   }
 
   function formatThaiDate(dateStr) {
@@ -300,114 +141,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${day} ${THAI_MONTHS[month]} ${year}`;
   }
 
-  function renderCardButtons(bill, isOwner) {
-    let btns = '';
+  // ─── Bank Settings ─────────────────────────────────────────────────────────
 
-    if (!isOwner) {
-      // Tenant view
-      if (bill.status === 'paid') {
-        if (bill.slipImageUrl) {
-          btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 ดูสลิป</button>`;
-        }
-        btns += `<span style="font-size:0.8rem; color:var(--status-paid-text); font-weight:600;">✓ ชำระแล้ว</span>`;
-      } else {
-        btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}">💳 แจ้งชำระเงิน</button>`;
-      }
-    } else {
-      // Owner view
-      if (bill.slipImageUrl) {
-        btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 ดูสลิป</button>`;
-      }
-
-      if (bill.status !== 'paid') {
-        btns += `<button class="btn btn-secondary btn-sm btn-mark-paid" data-id="${bill.id}">✅ ทำเป็นจ่ายแล้ว</button>`;
-      }
-
-      btns += `<button class="btn btn-secondary btn-sm btn-edit-bill" data-id="${bill.id}">✏️ แก้ไข</button>`;
-      btns += `<button class="btn btn-danger btn-sm btn-delete-bill" data-id="${bill.id}">🗑️</button>`;
-    }
-
-    return btns;
+  async function loadBankSettings() {
+    const settings = await window.dataService.getSettings();
+    if (bankNameEl) bankNameEl.textContent = settings.bankName;
+    if (bankAccountNoEl) bankAccountNoEl.textContent = settings.bankAccountNo;
+    if (bankAccountNameEl) bankAccountNameEl.textContent = settings.bankAccountName;
   }
 
-  function attachBillCardEvents() {
-    // Pay button
-    document.querySelectorAll('.btn-pay').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.target.getAttribute('data-id');
-        activeBillForPay = bills.find(b => b.id === id);
-        if (activeBillForPay) {
-          document.getElementById('payModalTitle').textContent = `แจ้งชำระ: ${activeBillForPay.title}`;
-          document.getElementById('payModalAmount').textContent = formatCurrency(activeBillForPay.amount);
-          slipPreviewContainer.style.display = 'none';
-          payModal.classList.add('active');
-        }
-      });
-    });
+  // ─── Header & Navigation ───────────────────────────────────────────────────
 
-    // View slip
-    document.querySelectorAll('.btn-view-slip').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const slipUrl = e.currentTarget.getAttribute('data-slip');
-        if (slipUrl && lightboxModal) {
-          lightboxImg.src = slipUrl;
-          lightboxModal.classList.add('active');
-        }
-      });
-    });
-
-    // Owner actions: Mark paid
-    document.querySelectorAll('.btn-mark-paid').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const id = e.target.getAttribute('data-id');
-        await window.dataService.updateBillStatus(id, 'paid');
-        showToast('อัปเดตสถานะเป็นจ่ายแล้วเรียบร้อย');
-        refreshData();
-      });
-    });
-
-    // Owner actions: Edit bill
-    document.querySelectorAll('.btn-edit-bill').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.target.getAttribute('data-id');
-        const bill = bills.find(b => b.id === id);
-        if (bill && billModal) {
-          document.getElementById('billIdInput').value = bill.id;
-          document.getElementById('billTypeSelect').value = bill.type;
-          document.getElementById('billTitleInput').value = bill.title;
-          document.getElementById('billAmountInput').value = bill.amount;
-          document.getElementById('billDueDateInput').value = bill.dueDate;
-          document.getElementById('billStatusSelect').value = bill.status;
-          document.getElementById('billNoteInput').value = bill.note || '';
-          document.getElementById('billModalTitle').textContent = 'แก้ไขรายการบิล';
-          billModal.classList.add('active');
-        }
-      });
-    });
-
-    // Owner actions: Delete bill
-    document.querySelectorAll('.btn-delete-bill').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const id = e.target.getAttribute('data-id');
-        if (confirm('คุณต้องการลบรายการบิลนี้ใช่หรือไม่?')) {
-          await window.dataService.deleteBill(id);
-          showToast('ลบบิลเรียบร้อยแล้ว');
-          refreshData();
-        }
-      });
-    });
+  function updateMonthHeader() {
+    const month = currentDate.getMonth();
+    const yearStr = currentDate.getFullYear() + 543;
+    monthYearLabel.textContent = `${THAI_MONTHS[month]} ${yearStr}`;
   }
 
-  // Copy Bank Account Button
-  if (copyBankBtn) {
-    copyBankBtn.addEventListener('click', async () => {
-      const settings = await window.dataService.getSettings();
-      navigator.clipboard.writeText(settings.bankAccountNo.replace(/-/g, ''));
-      showToast('คัดลอกเลขบัญชีแล้ว!');
-    });
-  }
-
-  // Month Navigation
   if (prevMonthBtn) {
     prevMonthBtn.addEventListener('click', () => {
       currentDate.setMonth(currentDate.getMonth() - 1);
@@ -426,14 +176,261 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Pay Form Submit (Tenant)
+  // ─── Data Refresh ──────────────────────────────────────────────────────────
+
+  async function refreshData() {
+    bills = await window.dataService.getBills();
+    renderSummary();
+    renderCalendar();
+    renderBillsList();
+  }
+
+  // ─── Summary Card ──────────────────────────────────────────────────────────
+
+  function renderSummary() {
+    const year = currentDate.getFullYear();
+    const monthStr = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const prefix = `${year}-${monthStr}`;
+    const monthBills = bills.filter(b => b.dueDate && b.dueDate.startsWith(prefix));
+
+    const total = monthBills.reduce((sum, b) => sum + Number(b.amount), 0);
+    const paid = monthBills.filter(b => b.status === 'paid').reduce((sum, b) => sum + Number(b.amount), 0);
+    const pendingCount = monthBills.filter(b => b.status !== 'paid').length;
+    const paidCount = monthBills.filter(b => b.status === 'paid').length;
+
+    if (summaryTotalAmount) summaryTotalAmount.textContent = formatCurrency(total);
+    if (summaryPaidAmount) summaryPaidAmount.textContent = formatCurrency(paid);
+    if (summaryProgressBar) {
+      summaryProgressBar.style.width = total > 0 ? `${(paid / total) * 100}%` : '0%';
+    }
+    if (summaryStatPaid) summaryStatPaid.textContent = `${paidCount} รายการ`;
+    if (summaryStatPending) summaryStatPending.textContent = `${pendingCount} รายการ`;
+  }
+
+  // ─── Calendar ──────────────────────────────────────────────────────────────
+
+  // Map bill type → CSS dot class name
+  function getDotType(type) {
+    if (type === 'common_fee') return 'common';
+    if (type === 'pool_cleaning') return 'pool';
+    return type; // rent, electricity, internet, garbage, other
+  }
+
+  function renderCalendar() {
+    if (!calendarGrid) return;
+    calendarGrid.innerHTML = '';
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const lastDate = new Date(year, month + 1, 0).getDate();
+    const prevLastDate = new Date(year, month, 0).getDate();
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    // Previous month fillers
+    for (let x = firstDayIndex; x > 0; x--) {
+      const cell = document.createElement('div');
+      cell.className = 'calendar-cell other-month';
+      cell.innerHTML = `<span class="calendar-date-number">${prevLastDate - x + 1}</span>`;
+      calendarGrid.appendChild(cell);
+    }
+
+    // Current month
+    for (let day = 1; day <= lastDate; day++) {
+      const dayStr = String(day).padStart(2, '0');
+      const monthStr = String(month + 1).padStart(2, '0');
+      const dateKey = `${year}-${monthStr}-${dayStr}`;
+
+      const cell = document.createElement('div');
+      cell.className = 'calendar-cell';
+      if (dateKey === todayStr) cell.classList.add('today');
+      if (selectedDate === dateKey) cell.classList.add('selected');
+      cell.innerHTML = `<span class="calendar-date-number">${day}</span>`;
+
+      const dayBills = bills.filter(b => b.dueDate === dateKey);
+      if (dayBills.length > 0) {
+        const dotsContainer = document.createElement('div');
+        dotsContainer.className = 'calendar-dots';
+        dayBills.forEach(b => {
+          const dot = document.createElement('div');
+          const dotType = getDotType(b.type);
+          dot.className = `dot dot-${dotType}${b.status === 'paid' ? ' dot-paid' : ''}`;
+          dot.title = `${b.title} (${b.amount} บ.)`;
+          dotsContainer.appendChild(dot);
+        });
+        cell.appendChild(dotsContainer);
+      }
+
+      cell.addEventListener('click', () => {
+        selectedDate = selectedDate === dateKey ? null : dateKey;
+        renderCalendar();
+        renderBillsList();
+      });
+
+      calendarGrid.appendChild(cell);
+    }
+  }
+
+  // ─── Bill Cards ────────────────────────────────────────────────────────────
+
+  function renderBillsList() {
+    if (!billsList) return;
+    billsList.innerHTML = '';
+
+    const year = currentDate.getFullYear();
+    const monthStr = String(currentDate.getMonth() + 1).padStart(2, '0');
+    let displayBills = bills.filter(b => b.dueDate && b.dueDate.startsWith(`${year}-${monthStr}`));
+
+    if (selectedDate) {
+      displayBills = displayBills.filter(b => b.dueDate === selectedDate);
+    }
+
+    displayBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+    if (displayBills.length === 0) {
+      billsList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <p>${selectedDate ? 'ไม่มีบิลที่ต้องชำระในวันนี้' : 'ไม่มีรายการบิลในเดือนนี้'}</p>
+        </div>`;
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    displayBills.forEach(bill => {
+      let currentStatus = bill.status;
+      if (currentStatus === 'pending' && bill.dueDate < todayStr) currentStatus = 'overdue';
+
+      const statusLabels = { paid: 'จ่ายแล้ว', pending: 'รอชำระ', overdue: 'เกินกำหนด' };
+
+      const card = document.createElement('div');
+      card.className = `bill-card type-${bill.type}`;
+      card.innerHTML = `
+        <div class="bill-main-info">
+          <div class="bill-left">
+            <div class="bill-icon-box type-${bill.type}">${TYPE_ICONS[bill.type] || '📄'}</div>
+            <div class="bill-details">
+              <h3>${bill.title}</h3>
+              <p>ครบกำหนด: ${formatThaiDate(bill.dueDate)}</p>
+            </div>
+          </div>
+          <div class="bill-right">
+            <div class="bill-amount">${formatCurrency(bill.amount)}</div>
+            <span class="bill-status-tag status-${currentStatus}">${statusLabels[currentStatus]}</span>
+          </div>
+        </div>
+        ${bill.note ? `<div class="bill-note">💬 ${bill.note}</div>` : ''}
+        <div class="bill-actions">${renderCardButtons(bill, isOwnerPage)}</div>
+      `;
+      billsList.appendChild(card);
+    });
+
+    attachBillCardEvents();
+  }
+
+  function renderCardButtons(bill, isOwner) {
+    let btns = '';
+    if (!isOwner) {
+      if (bill.status === 'paid') {
+        if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 ดูสลิป</button>`;
+        btns += `<span style="font-size:0.8rem; color:var(--status-paid-text); font-weight:600;">✓ ชำระแล้ว</span>`;
+      } else {
+        btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}">💳 แจ้งชำระเงิน</button>`;
+      }
+    } else {
+      if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 ดูสลิป</button>`;
+      if (bill.status !== 'paid') btns += `<button class="btn btn-secondary btn-sm btn-mark-paid" data-id="${bill.id}">✅ ทำเป็นจ่ายแล้ว</button>`;
+      btns += `<button class="btn btn-secondary btn-sm btn-edit-bill" data-id="${bill.id}">✏️ แก้ไข</button>`;
+      btns += `<button class="btn btn-danger btn-sm btn-delete-bill" data-id="${bill.id}">🗑️</button>`;
+    }
+    return btns;
+  }
+
+  function attachBillCardEvents() {
+    document.querySelectorAll('.btn-pay').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.getAttribute('data-id');
+        activeBillForPay = bills.find(b => b.id === id);
+        if (activeBillForPay) {
+          document.getElementById('payModalTitle').textContent = `แจ้งชำระ: ${activeBillForPay.title}`;
+          document.getElementById('payModalAmount').textContent = formatCurrency(activeBillForPay.amount);
+          slipPreviewContainer.style.display = 'none';
+          payModal.classList.add('active');
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-view-slip').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const slipUrl = e.currentTarget.getAttribute('data-slip');
+        if (slipUrl && lightboxModal) {
+          lightboxImg.src = slipUrl;
+          lightboxModal.classList.add('active');
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-mark-paid').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.getAttribute('data-id');
+        await window.dataService.updateBillStatus(id, 'paid');
+        showToast('อัปเดตสถานะเป็นจ่ายแล้วเรียบร้อย');
+        refreshData();
+      });
+    });
+
+    document.querySelectorAll('.btn-edit-bill').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.getAttribute('data-id');
+        const bill = bills.find(b => b.id === id);
+        if (bill && billModal) {
+          document.getElementById('billIdInput').value = bill.id;
+          document.getElementById('billTypeSelect').value = bill.type;
+          document.getElementById('billTitleInput').value = bill.title;
+          document.getElementById('billAmountInput').value = bill.amount;
+          document.getElementById('billDueDateInput').value = bill.dueDate;
+          document.getElementById('billStatusSelect').value = bill.status;
+          document.getElementById('billNoteInput').value = bill.note || '';
+          document.getElementById('billModalTitle').textContent = 'แก้ไขรายการบิล';
+          billModal.classList.add('active');
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-delete-bill').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.getAttribute('data-id');
+        if (confirm('คุณต้องการลบรายการบิลนี้ใช่หรือไม่?')) {
+          await window.dataService.deleteBill(id);
+          showToast('ลบบิลเรียบร้อยแล้ว');
+          refreshData();
+        }
+      });
+    });
+  }
+
+  // ─── Copy Bank Button ──────────────────────────────────────────────────────
+
+  if (copyBankBtn) {
+    copyBankBtn.addEventListener('click', async () => {
+      const settings = await window.dataService.getSettings();
+      navigator.clipboard.writeText(settings.bankAccountNo.replace(/-/g, ''));
+      showToast('คัดลอกเลขบัญชีแล้ว!');
+    });
+  }
+
+  // ─── Pay Modal ─────────────────────────────────────────────────────────────
+
   if (payForm) {
     slipInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
         const reader = new FileReader();
-        reader.onload = (event) => {
-          slipPreviewImg.src = event.target.result;
+        reader.onload = (ev) => {
+          slipPreviewImg.src = ev.target.result;
           slipPreviewContainer.style.display = 'block';
         };
         reader.readAsDataURL(file);
@@ -443,13 +440,8 @@ document.addEventListener('DOMContentLoaded', () => {
     payForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!activeBillForPay) return;
-
       let slipUrl = null;
-      if (slipInput.files && slipInput.files[0]) {
-        // Convert image to DataURL Base64 for instant storage
-        slipUrl = slipPreviewImg.src;
-      }
-
+      if (slipInput.files && slipInput.files[0]) slipUrl = slipPreviewImg.src;
       await window.dataService.updateBillStatus(activeBillForPay.id, 'paid', slipUrl);
       payModal.classList.remove('active');
       showToast('แจ้งชำระเงินเรียบร้อยแล้ว ขอบคุณครับ');
@@ -457,15 +449,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Modals Close handlers
-  if (closePayModalBtn) {
-    closePayModalBtn.addEventListener('click', () => payModal.classList.remove('active'));
-  }
-  if (closeLightboxBtn) {
-    closeLightboxBtn.addEventListener('click', () => lightboxModal.classList.remove('active'));
-  }
+  if (closePayModalBtn) closePayModalBtn.addEventListener('click', () => payModal.classList.remove('active'));
+  if (closeLightboxBtn) closeLightboxBtn.addEventListener('click', () => lightboxModal.classList.remove('active'));
 
-  // Owner Handlers: Add Bill Modal
+  // ─── Owner: Add/Edit Bill Modal ────────────────────────────────────────────
+
   if (addBillBtn) {
     addBillBtn.addEventListener('click', () => {
       billForm.reset();
@@ -478,9 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (closeBillModalBtn) {
-    closeBillModalBtn.addEventListener('click', () => billModal.classList.remove('active'));
-  }
+  if (closeBillModalBtn) closeBillModalBtn.addEventListener('click', () => billModal.classList.remove('active'));
 
   if (billForm) {
     billForm.addEventListener('submit', async (e) => {
@@ -492,9 +478,10 @@ document.addEventListener('DOMContentLoaded', () => {
         amount: Number(document.getElementById('billAmountInput').value),
         dueDate: document.getElementById('billDueDateInput').value,
         status: document.getElementById('billStatusSelect').value,
-        note: document.getElementById('billNoteInput').value
+        note: document.getElementById('billNoteInput').value,
+        paidAt: null,
+        slipImageUrl: null
       };
-
       await window.dataService.saveBill(billData);
       billModal.classList.remove('active');
       showToast('บันทึกบิลเรียบร้อยแล้ว');
@@ -502,22 +489,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Owner Handlers: Auto Generate Monthly Bills
+  // ─── Owner: Auto Generate Monthly Bills ────────────────────────────────────
+
   if (generateMonthBillsBtn) {
     generateMonthBillsBtn.addEventListener('click', async () => {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth() + 1;
+      generateMonthBillsBtn.disabled = true;
+      generateMonthBillsBtn.textContent = '⏳ กำลังสร้าง...';
       const result = await window.dataService.generateMonthlyBills(year, month);
-      if (result.success) {
-        showToast(`สร้างบิลประจำเดือน ${month}/${year} (${result.count} รายการ) สำเร็จ`);
-        refreshData();
-      } else {
-        alert(result.message);
-      }
+      generateMonthBillsBtn.disabled = false;
+      generateMonthBillsBtn.innerHTML = '⚡ สร้างบิลเดือนนี้อัตโนมัติ';
+      showToast(result.message, !result.success && result.count === 0);
+      if (result.count > 0) refreshData();
     });
   }
 
-  // Owner Handlers: Settings Modal
+  // ─── Owner: Settings Modal ─────────────────────────────────────────────────
+
   if (settingsBtn) {
     settingsBtn.addEventListener('click', async () => {
       const settings = await window.dataService.getSettings();
@@ -528,9 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (closeSettingsModalBtn) {
-    closeSettingsModalBtn.addEventListener('click', () => settingsModal.classList.remove('active'));
-  }
+  if (closeSettingsModalBtn) closeSettingsModalBtn.addEventListener('click', () => settingsModal.classList.remove('active'));
 
   if (settingsForm) {
     settingsForm.addEventListener('submit', async (e) => {
@@ -549,27 +536,197 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Initialize App & Realtime Cloud Sync
+  // ─── Owner: Recurring Templates Modal ─────────────────────────────────────
+
+  async function loadAndRenderTemplates() {
+    recurringTemplates = await window.dataService.getRecurringTemplates();
+    renderRecurringList();
+  }
+
+  function renderRecurringList() {
+    const container = document.getElementById('recurringTemplatesList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (recurringTemplates.length === 0) {
+      container.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:0.85rem; padding:20px 0;">ยังไม่มีรายการประจำ</p>`;
+      return;
+    }
+
+    recurringTemplates
+      .slice()
+      .sort((a, b) => (a.dayOfMonth || 1) - (b.dayOfMonth || 1))
+      .forEach(tmpl => {
+        const freqLabel = FREQ_LABELS[tmpl.frequency] || tmpl.frequency;
+        const anchorLabel = tmpl.frequency !== 'monthly'
+          ? ` (เริ่ม${THAI_MONTHS_SHORT[(Number(tmpl.anchorMonth) || 1) - 1]})` : '';
+
+        const item = document.createElement('div');
+        item.style.cssText = `
+          background: var(--bg-card-subtle);
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          padding: 12px;
+          margin-bottom: 10px;
+          border-left: 4px solid ${getTypeColor(tmpl.type)};
+          opacity: ${tmpl.enabled ? 1 : 0.5};
+        `;
+        item.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px; flex-wrap:wrap;">
+                <span>${TYPE_ICONS[tmpl.type] || '📄'}</span>
+                <strong style="font-size:0.9rem;">${tmpl.title}</strong>
+                ${!tmpl.enabled ? '<span style="font-size:0.7rem; background:#ef4444; color:white; padding:1px 6px; border-radius:8px;">ปิด</span>' : ''}
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-secondary);">
+                ฿${Number(tmpl.amount).toLocaleString()} · วันที่ ${tmpl.dayOfMonth} · ${freqLabel}${anchorLabel}
+              </div>
+              ${tmpl.note ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:3px;">💬 ${tmpl.note}</div>` : ''}
+            </div>
+            <div style="display:flex; gap:6px; flex-shrink:0; align-items:flex-start;">
+              <button class="btn btn-secondary btn-sm btn-edit-tmpl" data-id="${tmpl.id}" style="padding:4px 10px; font-size:0.8rem;">✏️</button>
+              <button class="btn btn-danger btn-sm btn-delete-tmpl" data-id="${tmpl.id}" style="padding:4px 10px; font-size:0.8rem;">🗑️</button>
+            </div>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+
+    container.querySelectorAll('.btn-edit-tmpl').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        const tmpl = recurringTemplates.find(t => t.id === id);
+        if (tmpl) openRecurringForm(tmpl);
+      });
+    });
+
+    container.querySelectorAll('.btn-delete-tmpl').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        const tmpl = recurringTemplates.find(t => t.id === id);
+        if (confirm(`ลบรายการ "${tmpl ? tmpl.title : id}" ออกจากรายการประจำ?`)) {
+          await window.dataService.deleteRecurringTemplate(id);
+          await loadAndRenderTemplates();
+          showToast('ลบรายการประจำเรียบร้อยแล้ว');
+        }
+      });
+    });
+  }
+
+  function getTypeColor(type) {
+    const colors = {
+      rent: '#6366F1', common_fee: '#06B6D4', electricity: '#F59E0B',
+      internet: '#10B981', pool_cleaning: '#EC4899', garbage: '#78716C', other: '#94A3B8'
+    };
+    return colors[type] || '#94A3B8';
+  }
+
+  function openRecurringForm(tmpl = null) {
+    if (!recurringListView || !recurringFormView) return;
+    recurringListView.style.display = 'none';
+    recurringFormView.style.display = 'block';
+
+    document.getElementById('recurringFormTitle').textContent =
+      tmpl ? 'แก้ไขรายการประจำ' : 'เพิ่มรายการประจำใหม่';
+
+    if (tmpl) {
+      document.getElementById('recurringTmplId').value = tmpl.id;
+      document.getElementById('recurringTmplType').value = tmpl.type;
+      document.getElementById('recurringTmplTitle').value = tmpl.title;
+      document.getElementById('recurringTmplAmount').value = tmpl.amount;
+      document.getElementById('recurringTmplDay').value = tmpl.dayOfMonth;
+      document.getElementById('recurringTmplFrequency').value = tmpl.frequency;
+      document.getElementById('recurringTmplAnchorMonth').value = tmpl.anchorMonth || 1;
+      document.getElementById('recurringTmplNote').value = tmpl.note || '';
+      document.getElementById('recurringTmplEnabled').checked = tmpl.enabled !== false;
+    } else {
+      recurringTemplateForm.reset();
+      document.getElementById('recurringTmplId').value = '';
+      document.getElementById('recurringTmplEnabled').checked = true;
+    }
+    updateAnchorVisibility();
+  }
+
+  function updateAnchorVisibility() {
+    if (!recurringTmplFrequency || !anchorMonthGroup) return;
+    anchorMonthGroup.style.display = recurringTmplFrequency.value !== 'monthly' ? 'block' : 'none';
+  }
+
+  if (recurringBtn) {
+    recurringBtn.addEventListener('click', async () => {
+      await loadAndRenderTemplates();
+      if (recurringListView) recurringListView.style.display = 'block';
+      if (recurringFormView) recurringFormView.style.display = 'none';
+      if (recurringModal) recurringModal.classList.add('active');
+    });
+  }
+
+  if (closeRecurringModalBtn) {
+    closeRecurringModalBtn.addEventListener('click', () => recurringModal && recurringModal.classList.remove('active'));
+  }
+
+  if (addRecurringBtn) {
+    addRecurringBtn.addEventListener('click', () => openRecurringForm(null));
+  }
+
+  if (backToRecurringListBtn) {
+    backToRecurringListBtn.addEventListener('click', async () => {
+      await loadAndRenderTemplates();
+      if (recurringListView) recurringListView.style.display = 'block';
+      if (recurringFormView) recurringFormView.style.display = 'none';
+    });
+  }
+
+  if (recurringTmplFrequency) {
+    recurringTmplFrequency.addEventListener('change', updateAnchorVisibility);
+  }
+
+  if (recurringTemplateForm) {
+    recurringTemplateForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const tmpl = {
+        id: document.getElementById('recurringTmplId').value || null,
+        type: document.getElementById('recurringTmplType').value,
+        title: document.getElementById('recurringTmplTitle').value,
+        amount: Number(document.getElementById('recurringTmplAmount').value),
+        dayOfMonth: Number(document.getElementById('recurringTmplDay').value),
+        frequency: document.getElementById('recurringTmplFrequency').value,
+        anchorMonth: Number(document.getElementById('recurringTmplAnchorMonth').value),
+        note: document.getElementById('recurringTmplNote').value,
+        enabled: document.getElementById('recurringTmplEnabled').checked
+      };
+      await window.dataService.saveRecurringTemplate(tmpl);
+      await loadAndRenderTemplates();
+      if (recurringListView) recurringListView.style.display = 'block';
+      if (recurringFormView) recurringFormView.style.display = 'none';
+      showToast('บันทึกรายการประจำเรียบร้อยแล้ว');
+    });
+  }
+
+  // ─── Initialize ────────────────────────────────────────────────────────────
+
   loadBankSettings();
   updateMonthHeader();
   refreshData();
 
-  // Listen for live real-time cloud changes from Firestore
+  // ─── Firestore Real-Time Listeners ─────────────────────────────────────────
+
   if (window.dataService && window.dataService.db) {
     try {
+      // Live bills sync
       window.dataService.db.collection('bills').onSnapshot(snapshot => {
         if (!snapshot.empty) {
-          const cloudBills = [];
-          snapshot.forEach(doc => cloudBills.push({ id: doc.id, ...doc.data() }));
-          bills = cloudBills;
-          localStorage.setItem(window.dataService.storageKey, JSON.stringify(cloudBills));
+          bills = [];
+          snapshot.forEach(doc => bills.push({ id: doc.id, ...doc.data() }));
+          localStorage.setItem(window.dataService.storageKey, JSON.stringify(bills));
           renderSummary();
           renderCalendar();
           renderBillsList();
         }
       });
 
-      // Listen for bank settings realtime updates across all devices
+      // Live bank settings sync
       window.dataService.db.collection('settings').doc('bank').onSnapshot(doc => {
         if (doc && doc.exists) {
           const settings = doc.data();
@@ -578,7 +735,21 @@ document.addEventListener('DOMContentLoaded', () => {
           if (bankAccountNameEl) bankAccountNameEl.textContent = settings.bankAccountName;
         }
       });
-    } catch(e) {
+
+      // Live recurring templates sync — re-render list if modal is open
+      if (isOwnerPage) {
+        window.dataService.db.collection('recurringTemplates').onSnapshot(snapshot => {
+          if (!snapshot.empty) {
+            recurringTemplates = [];
+            snapshot.forEach(doc => recurringTemplates.push({ id: doc.id, ...doc.data() }));
+            if (recurringModal && recurringModal.classList.contains('active') && recurringListView && recurringListView.style.display !== 'none') {
+              renderRecurringList();
+            }
+          }
+        });
+      }
+
+    } catch (e) {
       console.warn('Firestore realtime listener error:', e);
     }
   }

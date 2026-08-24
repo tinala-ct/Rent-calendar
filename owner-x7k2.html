@@ -55,6 +55,9 @@
         <button class="btn btn-secondary" id="addBillBtn">
           ➕ เพิ่มบิลใหม่
         </button>
+        <button class="btn btn-secondary" id="recurringBtn" style="grid-column: 1 / -1; border: 1px dashed var(--primary); color: var(--primary);">
+          🔄 จัดการรายการประจำ (Recurring)
+        </button>
       </section>
 
       <!-- Calendar Section -->
@@ -108,6 +111,8 @@
             <option value="electricity">ค่าไฟฟ้า (Electricity)</option>
             <option value="internet">ค่าอินเทอร์เน็ต (Internet)</option>
             <option value="pool_cleaning">ค่าทำความสะอาดสระว่ายน้ำ (Pool Cleaning)</option>
+            <option value="garbage">ค่าเก็บขยะ (Garbage)</option>
+            <option value="other">อื่นๆ (Other)</option>
           </select>
         </div>
 
@@ -187,11 +192,118 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- Modal: Recurring Templates Manager -->
+  <div class="modal-backdrop" id="recurringModal">
+    <div class="modal-sheet">
+
+      <!-- List View -->
+      <div id="recurringListView">
+        <div class="modal-header">
+          <h2>🔄 รายการประจำ</h2>
+          <button class="btn-close" id="closeRecurringModalBtn">✕</button>
+        </div>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:14px; line-height:1.5;">
+          รายการเหล่านี้จะถูกสร้างอัตโนมัติทุกเดือนเมื่อกด <strong>"สร้างบิลเดือนนี้อัตโนมัติ"</strong>
+          วันที่จะถูกปรับอัตโนมัติถ้าเดือนนั้นมีวันน้อยกว่า (เช่น ก.พ.)
+        </p>
+        <div id="recurringTemplatesList" style="margin-bottom:16px;"></div>
+        <button class="btn btn-primary btn-full" id="addRecurringBtn">➕ เพิ่มรายการประจำใหม่</button>
+      </div>
+
+      <!-- Form View (Add / Edit) -->
+      <div id="recurringFormView" style="display:none;">
+        <div class="modal-header">
+          <h2 id="recurringFormTitle">เพิ่มรายการประจำ</h2>
+          <button class="btn-close" id="backToRecurringListBtn" title="กลับ" style="font-size:1.1rem;">←</button>
+        </div>
+
+        <form id="recurringTemplateForm">
+          <input type="hidden" id="recurringTmplId">
+
+          <div class="form-group">
+            <label>ประเภท</label>
+            <select class="form-control" id="recurringTmplType" required>
+              <option value="rent">ค่าเช่าบ้าน (Rent)</option>
+              <option value="common_fee">ค่าส่วนกลาง + ค่าน้ำ (Common Fee)</option>
+              <option value="electricity">ค่าไฟฟ้า (Electricity)</option>
+              <option value="internet">ค่าอินเทอร์เน็ต (Internet)</option>
+              <option value="pool_cleaning">ค่าทำความสะอาดสระว่ายน้ำ (Pool Cleaning)</option>
+              <option value="garbage">ค่าเก็บขยะ (Garbage)</option>
+              <option value="other">อื่นๆ (Other)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>ชื่อรายการ</label>
+            <input type="text" class="form-control" id="recurringTmplTitle" placeholder="เช่น ค่าเก็บขยะ" required>
+          </div>
+
+          <div class="form-group">
+            <label>จำนวนเงิน (บาท)</label>
+            <input type="number" class="form-control" id="recurringTmplAmount" placeholder="0" min="0" required>
+          </div>
+
+          <div class="form-group">
+            <label>วันที่ครบกำหนดในเดือน (1-31)</label>
+            <input type="number" class="form-control" id="recurringTmplDay" placeholder="1" min="1" max="31" required>
+            <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
+              ⚡ เดือนที่มีวันน้อยกว่า (เช่น ก.พ.มี 28 วัน) จะปรับวันที่ให้อัตโนมัติ
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label>ความถี่การชำระ</label>
+            <select class="form-control" id="recurringTmplFrequency" required>
+              <option value="monthly">ทุกเดือน</option>
+              <option value="every3months">ทุก 3 เดือน</option>
+              <option value="every6months">ทุก 6 เดือน</option>
+              <option value="yearly">ปีละครั้ง</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="anchorMonthGroup" style="display:none;">
+            <label>เดือนอ้างอิง (เดือนแรกที่ต้องชำระ)</label>
+            <select class="form-control" id="recurringTmplAnchorMonth">
+              <option value="1">มกราคม</option>
+              <option value="2">กุมภาพันธ์</option>
+              <option value="3">มีนาคม</option>
+              <option value="4">เมษายน</option>
+              <option value="5">พฤษภาคม</option>
+              <option value="6">มิถุนายน</option>
+              <option value="7">กรกฎาคม</option>
+              <option value="8">สิงหาคม</option>
+              <option value="9">กันยายน</option>
+              <option value="10">ตุลาคม</option>
+              <option value="11">พฤศจิกายน</option>
+              <option value="12">ธันวาคม</option>
+            </select>
+            <small style="color:var(--text-muted); font-size:0.75rem; margin-top:4px; display:block;">
+              เช่น เลือก "สิงหาคม" สำหรับทุก 3 เดือน → จะสร้างบิลในเดือน ส.ค., พ.ย., ก.พ., พ.ค.
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label>หมายเหตุ (ถ้ามี)</label>
+            <input type="text" class="form-control" id="recurringTmplNote" placeholder="เช่น คำนวณตามหน่วยมิเตอร์">
+          </div>
+
+          <div class="form-group" style="flex-direction:row; align-items:center; gap:10px; margin-bottom:8px;">
+            <input type="checkbox" id="recurringTmplEnabled" checked style="width:18px; height:18px; accent-color:var(--primary); cursor:pointer;">
+            <label for="recurringTmplEnabled" style="margin:0; cursor:pointer; font-weight:600;">เปิดใช้งานรายการนี้</label>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px;">💾 บันทึกรายการประจำ</button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <!-- App Scripts -->
-  <script src="js/firebase-config.js?v=1.0.3"></script>
-  <script src="js/app.js?v=1.0.3"></script>
+  <script src="js/firebase-config.js?v=1.1.0"></script>
+  <script src="js/app.js?v=1.1.0"></script>
 </body>
 </html>

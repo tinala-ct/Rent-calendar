@@ -20,8 +20,90 @@ const DEFAULT_SETTINGS = {
   firebaseConfig: FIREBASE_CONFIG
 };
 
-// Initial Seed Data (Used only once to seed Cloud Database if brand new)
+// ─── Default Recurring Templates ──────────────────────────────────────────────
+// These are seeded to Firestore once when the database is empty.
+const DEFAULT_RECURRING_TEMPLATES = [
+  {
+    id: 'tmpl-garbage',
+    type: 'garbage',
+    title: 'ค่าเก็บขยะ',
+    amount: 200,
+    dayOfMonth: 1,
+    frequency: 'monthly',
+    anchorMonth: 1,
+    enabled: true,
+    note: 'ค่าเก็บขยะประจำเดือน'
+  },
+  {
+    id: 'tmpl-common',
+    type: 'common_fee',
+    title: 'ค่าส่วนกลาง + ค่าน้ำ',
+    amount: 1800,
+    dayOfMonth: 27,
+    frequency: 'monthly',
+    anchorMonth: 1,
+    enabled: true,
+    note: 'รวมค่าน้ำประปา'
+  },
+  {
+    id: 'tmpl-electricity',
+    type: 'electricity',
+    title: 'ค่าไฟฟ้า',
+    amount: 3000,
+    dayOfMonth: 17,
+    frequency: 'monthly',
+    anchorMonth: 1,
+    enabled: true,
+    note: 'คำนวณตามหน่วยมิเตอร์จริง'
+  },
+  {
+    id: 'tmpl-internet',
+    type: 'internet',
+    title: 'ค่าอินเทอร์เน็ต',
+    amount: 599,
+    dayOfMonth: 21,
+    frequency: 'monthly',
+    anchorMonth: 1,
+    enabled: true,
+    note: 'แพ็กเกจ 1000/500 Mbps'
+  },
+  {
+    id: 'tmpl-pool',
+    type: 'pool_cleaning',
+    title: 'ค่าทำความสะอาดสระว่ายน้ำ',
+    amount: 2500,
+    dayOfMonth: 27,
+    frequency: 'monthly',
+    anchorMonth: 1,
+    enabled: true,
+    note: 'บริการล้างสระประจำเดือน'
+  },
+  {
+    id: 'tmpl-rent',
+    type: 'rent',
+    title: 'ค่าเช่าบ้าน',
+    amount: 135000,
+    dayOfMonth: 30,
+    frequency: 'every3months',
+    anchorMonth: 8,
+    enabled: true,
+    note: 'ค่าเช่าล่วงหน้า 3 เดือน (45,000 บ./เดือน) — ส.ค., พ.ย., ก.พ., พ.ค.'
+  }
+];
+
+// Initial Seed Bills (Used only once to seed Cloud Database if brand new)
 const SEED_BILLS = [
+  {
+    id: 'bill-garbage-aug',
+    type: 'garbage',
+    title: 'ค่าเก็บขยะ',
+    amount: 200,
+    dueDate: '2026-08-01',
+    status: 'paid',
+    paidAt: '2026-08-01T09:00:00.000Z',
+    slipImageUrl: null,
+    note: 'ค่าเก็บขยะประจำเดือน'
+  },
   {
     id: 'bill-rent-aug',
     type: 'rent',
@@ -108,6 +190,8 @@ class DataService {
     }
   }
 
+  // ─── Settings ───────────────────────────────────────────────────────────────
+
   async getSettings() {
     if (this.db) {
       try {
@@ -117,7 +201,6 @@ class DataService {
           localStorage.setItem(this.settingsKey, JSON.stringify(cloudSettings));
           return cloudSettings;
         } else {
-          // Seed default bank settings to Cloud Firestore
           await this.db.collection('settings').doc('bank').set(DEFAULT_SETTINGS);
           localStorage.setItem(this.settingsKey, JSON.stringify(DEFAULT_SETTINGS));
           return DEFAULT_SETTINGS;
@@ -126,7 +209,6 @@ class DataService {
         console.warn('Firestore settings fetch error:', e);
       }
     }
-
     try {
       const data = localStorage.getItem(this.settingsKey);
       let parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
@@ -140,19 +222,19 @@ class DataService {
   async saveSettings(settings) {
     settings.firebaseConfig = FIREBASE_CONFIG;
     localStorage.setItem(this.settingsKey, JSON.stringify(settings));
-
     if (this.db) {
       try {
         await this.db.collection('settings').doc('bank').set(settings, { merge: true });
-        console.log('Successfully saved bank settings to Cloud Firestore');
+        console.log('Saved bank settings to Cloud Firestore');
       } catch (e) {
         console.error('Firestore save settings error:', e);
       }
     }
   }
 
+  // ─── Bills ──────────────────────────────────────────────────────────────────
+
   async getBills() {
-    // 1. Fetch live bills from Cloud Firestore
     if (this.db) {
       try {
         const snapshot = await this.db.collection('bills').get();
@@ -162,11 +244,12 @@ class DataService {
           localStorage.setItem(this.storageKey, JSON.stringify(cloudBills));
           return cloudBills;
         } else {
-          // If Firestore is completely empty on the cloud, seed SEED_BILLS once to Cloud Firestore
-          console.log('Firestore is empty. Seeding initial bills to Cloud Firestore...');
+          console.log('Firestore is empty. Seeding initial bills...');
           for (const bill of SEED_BILLS) {
             await this.db.collection('bills').doc(bill.id).set(bill);
           }
+          // Also seed recurring templates
+          await this.getRecurringTemplates();
           localStorage.setItem(this.storageKey, JSON.stringify(SEED_BILLS));
           return SEED_BILLS;
         }
@@ -177,8 +260,6 @@ class DataService {
         }
       }
     }
-
-    // 2. Return local cached bills if offline
     try {
       const cached = localStorage.getItem(this.storageKey);
       return cached ? JSON.parse(cached) : [];
@@ -191,17 +272,14 @@ class DataService {
     if (!billData.id) {
       billData.id = 'bill-' + Date.now();
     }
-
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billData.id).set(billData, { merge: true });
-        console.log('Successfully saved bill to Cloud Firestore:', billData.id);
+        console.log('Saved bill to Firestore:', billData.id);
       } catch (e) {
-        console.error('Firestore save failed:', e);
+        console.error('Firestore save bill failed:', e);
       }
     }
-
-    const bills = await this.getBills();
     return billData;
   }
 
@@ -209,111 +287,167 @@ class DataService {
     const paidTimestamp = paidAt || new Date().toISOString();
     const updateData = { status, paidAt: paidTimestamp };
     if (slipImageUrl) updateData.slipImageUrl = slipImageUrl;
-
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billId).set(updateData, { merge: true });
-        console.log('Successfully updated bill status in Cloud Firestore:', billId);
       } catch (e) {
         console.error('Firestore status update failed:', e);
       }
     }
-
-    const bills = await this.getBills();
-    const bill = bills.find(b => b.id === billId);
-    return bill;
   }
 
   async deleteBill(billId) {
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billId).delete();
-        console.log('Successfully deleted bill from Cloud Firestore:', billId);
       } catch (e) {
-        console.error('Firestore delete failed:', e);
+        console.error('Firestore delete bill failed:', e);
       }
     }
-
-    await this.getBills();
   }
 
+  // ─── Recurring Templates ────────────────────────────────────────────────────
+
+  async getRecurringTemplates() {
+    if (this.db) {
+      try {
+        const snapshot = await this.db.collection('recurringTemplates').get();
+        if (!snapshot.empty) {
+          const templates = [];
+          snapshot.forEach(doc => templates.push({ id: doc.id, ...doc.data() }));
+          return templates;
+        } else {
+          // Seed default recurring templates to Firestore
+          console.log('Seeding default recurring templates...');
+          for (const tmpl of DEFAULT_RECURRING_TEMPLATES) {
+            await this.db.collection('recurringTemplates').doc(tmpl.id).set(tmpl);
+          }
+          return DEFAULT_RECURRING_TEMPLATES;
+        }
+      } catch (e) {
+        console.error('Firestore getRecurringTemplates error:', e);
+      }
+    }
+    return [...DEFAULT_RECURRING_TEMPLATES];
+  }
+
+  async saveRecurringTemplate(template) {
+    if (!template.id) {
+      template.id = 'tmpl-' + Date.now();
+    }
+    if (this.db) {
+      try {
+        await this.db.collection('recurringTemplates').doc(template.id).set(template, { merge: true });
+        console.log('Saved recurring template:', template.id);
+      } catch (e) {
+        console.error('Firestore save recurring template error:', e);
+      }
+    }
+    return template;
+  }
+
+  async deleteRecurringTemplate(templateId) {
+    if (this.db) {
+      try {
+        await this.db.collection('recurringTemplates').doc(templateId).delete();
+        console.log('Deleted recurring template:', templateId);
+      } catch (e) {
+        console.error('Firestore delete recurring template error:', e);
+      }
+    }
+  }
+
+  // ─── Smart Bill Generation ──────────────────────────────────────────────────
+
+  /**
+   * Check if a template should be generated for a given year/month.
+   * @param {object} template
+   * @param {number} year
+   * @param {number} month  (1-based)
+   */
+  _shouldGenerateForMonth(template, year, month) {
+    if (!template.enabled) return false;
+    if (template.frequency === 'monthly') return true;
+
+    const anchor = Number(template.anchorMonth) || 1;
+    // Positive modulo difference
+    const diff = ((month - anchor) % 12 + 12) % 12;
+
+    if (template.frequency === 'every3months') return diff % 3 === 0;
+    if (template.frequency === 'every6months') return diff % 6 === 0;
+    if (template.frequency === 'yearly') return month === anchor;
+    return false;
+  }
+
+  /**
+   * Returns a YYYY-MM-DD string, capping dayOfMonth to the last valid day.
+   * e.g. dayOfMonth=30, month=February → returns the 28th (or 29th in leap year).
+   */
+  _getSmartDueDate(year, month, dayOfMonth) {
+    // new Date(year, month, 0) = last day of the previous month = last day of `month`
+    const lastDay = new Date(year, month, 0).getDate();
+    const day = Math.min(Number(dayOfMonth), lastDay);
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  /**
+   * Generate bills for a given month from all enabled recurring templates.
+   * Skips templates that already have a bill for this month.
+   */
   async generateMonthlyBills(year, month) {
     const monthStr = String(month).padStart(2, '0');
-    const bills = await this.getBills();
-    
-    const existingForMonth = bills.filter(b => b.dueDate.startsWith(`${year}-${monthStr}`));
-    if (existingForMonth.length > 0) {
-      return { success: false, message: `มีบิลของเดือน ${month}/${year} อยู่แล้วในระบบ (${existingForMonth.length} รายการ)` };
-    }
+    const templates = await this.getRecurringTemplates();
+    const existingBills = await this.getBills();
 
-    const newBills = [];
+    const created = [];
+    const skipped = [];
 
-    if (['02', '05', '08', '11'].includes(monthStr)) {
-      newBills.push({
-        id: `bill-rent-${year}-${monthStr}`,
-        type: 'rent',
-        title: `ค่าเช่าบ้าน (งวด ${month}/${year})`,
-        amount: 135000,
-        dueDate: `${year}-${monthStr}-30`,
+    for (const template of templates) {
+      if (!this._shouldGenerateForMonth(template, year, month)) continue;
+
+      const billId = `bill-${template.id}-${year}-${monthStr}`;
+
+      // Skip if already exists
+      if (existingBills.some(b => b.id === billId)) {
+        skipped.push(template.title);
+        continue;
+      }
+
+      const dueDate = this._getSmartDueDate(year, month, template.dayOfMonth);
+
+      const newBill = {
+        id: billId,
+        type: template.type,
+        title: template.title,
+        amount: Number(template.amount),
+        dueDate,
         status: 'pending',
         paidAt: null,
         slipImageUrl: null,
-        note: 'ค่าเช่าล่วงหน้า 3 เดือน (45,000 บ./เดือน)'
-      });
+        note: template.note || '',
+        fromTemplate: template.id
+      };
+
+      await this.saveBill(newBill);
+      created.push(template.title);
     }
 
-    newBills.push({
-      id: `bill-common-${year}-${monthStr}`,
-      type: 'common_fee',
-      title: 'ค่าส่วนกลาง + ค่าน้ำ',
-      amount: 1800,
-      dueDate: `${year}-${monthStr}-27`,
-      status: 'pending',
-      paidAt: null,
-      slipImageUrl: null,
-      note: 'กำหนดโดยเจ้าของ'
-    });
-
-    newBills.push({
-      id: `bill-elec-${year}-${monthStr}`,
-      type: 'electricity',
-      title: 'ค่าไฟฟ้า',
-      amount: 3000,
-      dueDate: `${year}-${monthStr}-17`,
-      status: 'pending',
-      paidAt: null,
-      slipImageUrl: null,
-      note: 'คำนวณตามหน่วยมิเตอร์จริง'
-    });
-
-    newBills.push({
-      id: `bill-net-${year}-${monthStr}`,
-      type: 'internet',
-      title: 'ค่าอินเทอร์เน็ต',
-      amount: 599,
-      dueDate: `${year}-${monthStr}-21`,
-      status: 'pending',
-      paidAt: null,
-      slipImageUrl: null,
-      note: 'รายเดือนคงที่'
-    });
-
-    newBills.push({
-      id: `bill-pool-${year}-${monthStr}`,
-      type: 'pool_cleaning',
-      title: 'ค่าทำความสะอาดสระว่ายน้ำ',
-      amount: 2500,
-      dueDate: `${year}-${monthStr}-27`,
-      status: 'pending',
-      paidAt: null,
-      slipImageUrl: null,
-      note: 'บริการล้างสระประจำเดือน'
-    });
-
-    for (const b of newBills) {
-      await this.saveBill(b);
+    if (created.length === 0 && skipped.length === 0) {
+      return {
+        success: false,
+        count: 0,
+        message: 'ไม่มีรายการประจำในเดือนนี้ กรุณาตั้งค่ารายการประจำก่อน'
+      };
     }
-    return { success: true, count: newBills.length };
+
+    return {
+      success: true,
+      count: created.length,
+      skipped: skipped.length,
+      message: created.length > 0
+        ? `✅ สร้าง ${created.length} รายการสำเร็จ` + (skipped.length > 0 ? ` (ข้าม ${skipped.length} รายการที่มีแล้ว)` : '')
+        : `ℹ️ ทุกรายการมีอยู่แล้วในเดือนนี้ (${skipped.length} รายการ)`
+    };
   }
 }
 

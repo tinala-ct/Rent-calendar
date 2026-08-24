@@ -24,6 +24,8 @@
   --type-electricity: #F59E0B;  /* ค่าไฟฟ้า - Amber */
   --type-internet: #10B981;     /* ค่าอินเทอร์เน็ต - Emerald */
   --type-pool: #EC4899;         /* ค่าทำสระ - Pink */
+  --type-garbage: #78716C;      /* ค่าเก็บขยะ - Stone */
+  --type-other: #94A3B8;        /* อื่นๆ - Slate */
 
   /* Status Colors */
   --status-paid-bg: #DCFCE7;
@@ -418,6 +420,8 @@ body {
 .dot-electricity { background-color: var(--type-electricity); }
 .dot-internet { background-color: var(--type-internet); }
 .dot-pool { background-color: var(--type-pool); }
+.dot-garbage { background-color: var(--type-garbage); }
+.dot-other { background-color: var(--type-other); }
 
 .dot-paid { opacity: 0.4; }
 
@@ -456,6 +460,8 @@ body {
 .bill-card.type-electricity::before { background-color: var(--type-electricity); }
 .bill-card.type-internet::before { background-color: var(--type-internet); }
 .bill-card.type-pool_cleaning::before { background-color: var(--type-pool); }
+.bill-card.type-garbage::before { background-color: var(--type-garbage); }
+.bill-card.type-other::before { background-color: var(--type-other); }
 
 .bill-main-info {
   display: flex;
@@ -485,6 +491,8 @@ body {
 .bill-icon-box.type-electricity { background-color: var(--type-electricity); }
 .bill-icon-box.type-internet { background-color: var(--type-internet); }
 .bill-icon-box.type-pool_cleaning { background-color: var(--type-pool); }
+.bill-icon-box.type-garbage { background-color: var(--type-garbage); }
+.bill-icon-box.type-other { background-color: var(--type-other); }
 
 .bill-details h3 {
   font-size: 0.95rem;
