@@ -400,8 +400,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Copy Bank Account Button
   if (copyBankBtn) {
-    copyBankBtn.addEventListener('click', () => {
-      const settings = window.dataService.getSettings();
+    copyBankBtn.addEventListener('click', async () => {
+      const settings = await window.dataService.getSettings();
       navigator.clipboard.writeText(settings.bankAccountNo.replace(/-/g, ''));
       showToast('คัดลอกเลขบัญชีแล้ว!');
     });
