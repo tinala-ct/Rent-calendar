@@ -549,8 +549,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Initialize App
+  // Initialize App & Realtime Cloud Sync
   loadBankSettings();
   updateMonthHeader();
   refreshData();
+
+  // Listen for live real-time cloud changes from Firestore
+  if (window.dataService && window.dataService.db) {
+    try {
+      window.dataService.db.collection('bills').onSnapshot(snapshot => {
+        if (!snapshot.empty) {
+          const cloudBills = [];
+          snapshot.forEach(doc => cloudBills.push({ id: doc.id, ...doc.data() }));
+          bills = cloudBills;
+          localStorage.setItem(window.dataService.storageKey, JSON.stringify(cloudBills));
+          renderSummary();
+          renderCalendar();
+          renderBillsList();
+        }
+      });
+    } catch(e) {
+      console.warn('Realtime listener error:', e);
+    }
+  }
 });

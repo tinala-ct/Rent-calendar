@@ -113,9 +113,9 @@ class DataService {
   getSettings() {
     try {
       const data = localStorage.getItem(this.settingsKey);
-      if (!data) return DEFAULT_SETTINGS;
-      const parsed = JSON.parse(data);
-      if (!parsed.firebaseConfig || !parsed.firebaseConfig.apiKey) {
+      let parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
+      // Always override with default hardcoded keys if provided
+      if (DEFAULT_SETTINGS.firebaseConfig && DEFAULT_SETTINGS.firebaseConfig.apiKey) {
         parsed.firebaseConfig = DEFAULT_SETTINGS.firebaseConfig;
       }
       return parsed;
@@ -139,6 +139,14 @@ class DataService {
           snapshot.forEach(doc => cloudBills.push({ id: doc.id, ...doc.data() }));
           localStorage.setItem(this.storageKey, JSON.stringify(cloudBills));
           return cloudBills;
+        } else {
+          // Firestore is empty! Seed initial data to Cloud Firestore automatically
+          console.log('Seeding initial bills into Firestore Cloud Database...');
+          for (const bill of SEED_BILLS) {
+            await this.db.collection('bills').doc(bill.id).set(bill);
+          }
+          localStorage.setItem(this.storageKey, JSON.stringify(SEED_BILLS));
+          return SEED_BILLS;
         }
       } catch (e) {
         console.warn('Firestore fetch failed, fallback to LocalStorage:', e);
@@ -162,6 +170,7 @@ class DataService {
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billData.id).set(billData, { merge: true });
+        console.log('Successfully saved bill to Firestore:', billData.id);
       } catch (e) {
         console.error('Firestore save failed:', e);
       }
@@ -186,7 +195,8 @@ class DataService {
 
     if (this.db) {
       try {
-        await this.db.collection('bills').doc(billId).update(updateData);
+        await this.db.collection('bills').doc(billId).set(updateData, { merge: true });
+        console.log('Successfully updated bill status in Firestore:', billId);
       } catch (e) {
         console.error('Firestore status update failed:', e);
       }
@@ -207,6 +217,7 @@ class DataService {
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billId).delete();
+        console.log('Successfully deleted bill from Firestore:', billId);
       } catch (e) {
         console.error('Firestore delete failed:', e);
       }
