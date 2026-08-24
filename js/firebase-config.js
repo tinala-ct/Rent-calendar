@@ -1,6 +1,6 @@
 /**
  * Firebase Config & Data Management Layer
- * Support Firebase Firestore & Storage with auto-fallback to LocalStorage for offline/demo usage
+ * Support Firebase Firestore real-time cloud database with auto-fallback to LocalStorage for offline/demo usage
  */
 
 // Default Bank Info & Settings
@@ -81,7 +81,9 @@ class DataService {
   constructor() {
     this.storageKey = 'rent_tracker_bills_v1';
     this.settingsKey = 'rent_tracker_settings_v1';
+    this.db = null;
     this.initStorage();
+    this.initFirebase();
   }
 
   initStorage() {
@@ -90,6 +92,21 @@ class DataService {
     }
     if (!localStorage.getItem(this.settingsKey)) {
       localStorage.setItem(this.settingsKey, JSON.stringify(DEFAULT_SETTINGS));
+    }
+  }
+
+  initFirebase() {
+    try {
+      const settings = this.getSettings();
+      if (typeof firebase !== 'undefined' && settings.firebaseConfig && settings.firebaseConfig.apiKey) {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(settings.firebaseConfig);
+        }
+        this.db = firebase.firestore();
+        console.log('Firebase Firestore Initialized Successfully');
+      }
+    } catch (e) {
+      console.warn('Firebase initialization error, using LocalStorage:', e);
     }
   }
 
@@ -104,30 +121,53 @@ class DataService {
 
   saveSettings(settings) {
     localStorage.setItem(this.settingsKey, JSON.stringify(settings));
+    this.initFirebase();
   }
 
   async getBills() {
-    // If Firebase configured & active, attempt Firebase fetch. Fallback to LocalStorage.
+    // 1. Try Firebase Firestore if configured
+    if (this.db) {
+      try {
+        const snapshot = await this.db.collection('bills').get();
+        if (!snapshot.empty) {
+          const cloudBills = [];
+          snapshot.forEach(doc => cloudBills.push({ id: doc.id, ...doc.data() }));
+          localStorage.setItem(this.storageKey, JSON.stringify(cloudBills));
+          return cloudBills;
+        }
+      } catch (e) {
+        console.warn('Firestore fetch failed, fallback to LocalStorage:', e);
+      }
+    }
+
+    // 2. Fallback to LocalStorage
     try {
-      const bills = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
-      return bills;
+      return JSON.parse(localStorage.getItem(this.storageKey) || '[]');
     } catch (e) {
-      console.error('Error fetching bills:', e);
-      return [];
+      return SEED_BILLS;
     }
   }
 
   async saveBill(billData) {
-    const bills = await this.getBills();
-    if (billData.id) {
-      const index = bills.findIndex(b => b.id === billData.id);
-      if (index !== -1) {
-        bills[index] = { ...bills[index], ...billData };
-      } else {
-        bills.push(billData);
-      }
-    } else {
+    if (!billData.id) {
       billData.id = 'bill-' + Date.now();
+    }
+
+    // Save to Firestore if connected
+    if (this.db) {
+      try {
+        await this.db.collection('bills').doc(billData.id).set(billData, { merge: true });
+      } catch (e) {
+        console.error('Firestore save failed:', e);
+      }
+    }
+
+    // Save to LocalStorage
+    const bills = await this.getBills();
+    const index = bills.findIndex(b => b.id === billData.id);
+    if (index !== -1) {
+      bills[index] = { ...bills[index], ...billData };
+    } else {
       bills.push(billData);
     }
     localStorage.setItem(this.storageKey, JSON.stringify(bills));
@@ -135,30 +175,47 @@ class DataService {
   }
 
   async updateBillStatus(billId, status, slipImageUrl = null, paidAt = null) {
+    const paidTimestamp = paidAt || new Date().toISOString();
+    const updateData = { status, paidAt: paidTimestamp };
+    if (slipImageUrl) updateData.slipImageUrl = slipImageUrl;
+
+    if (this.db) {
+      try {
+        await this.db.collection('bills').doc(billId).update(updateData);
+      } catch (e) {
+        console.error('Firestore status update failed:', e);
+      }
+    }
+
     const bills = await this.getBills();
     const bill = bills.find(b => b.id === billId);
     if (bill) {
       bill.status = status;
       if (slipImageUrl) bill.slipImageUrl = slipImageUrl;
-      bill.paidAt = paidAt || new Date().toISOString();
+      bill.paidAt = paidTimestamp;
       localStorage.setItem(this.storageKey, JSON.stringify(bills));
     }
     return bill;
   }
 
   async deleteBill(billId) {
+    if (this.db) {
+      try {
+        await this.db.collection('bills').doc(billId).delete();
+      } catch (e) {
+        console.error('Firestore delete failed:', e);
+      }
+    }
+
     let bills = await this.getBills();
     bills = bills.filter(b => b.id !== billId);
     localStorage.setItem(this.storageKey, JSON.stringify(bills));
   }
 
-  // Auto-generate standard recurring bills for a given YYYY-MM
   async generateMonthlyBills(year, month) {
-    // month is 1-indexed (1..12)
     const monthStr = String(month).padStart(2, '0');
     const bills = await this.getBills();
     
-    // Check if bills for this month already exist
     const existingForMonth = bills.filter(b => b.dueDate.startsWith(`${year}-${monthStr}`));
     if (existingForMonth.length > 0) {
       return { success: false, message: `มีบิลของเดือน ${month}/${year} อยู่แล้วในระบบ (${existingForMonth.length} รายการ)` };
@@ -166,13 +223,12 @@ class DataService {
 
     const newBills = [];
 
-    // 1. Rent: Every 3 months (Aug [08], Nov [11], Feb [02], May [05])
     if (['02', '05', '08', '11'].includes(monthStr)) {
       newBills.push({
         id: `bill-rent-${year}-${monthStr}`,
         type: 'rent',
         title: `ค่าเช่าบ้าน (งวด ${month}/${year})`,
-        amount: 135000, // 45,000 x 3 months
+        amount: 135000,
         dueDate: `${year}-${monthStr}-30`,
         status: 'pending',
         paidAt: null,
@@ -181,12 +237,11 @@ class DataService {
       });
     }
 
-    // 2. Common fee (Due 27th)
     newBills.push({
       id: `bill-common-${year}-${monthStr}`,
       type: 'common_fee',
       title: 'ค่าส่วนกลาง + ค่าน้ำ',
-      amount: 1800, // Default estimated
+      amount: 1800,
       dueDate: `${year}-${monthStr}-27`,
       status: 'pending',
       paidAt: null,
@@ -194,12 +249,11 @@ class DataService {
       note: 'กำหนดโดยเจ้าของ'
     });
 
-    // 3. Electricity (Due 17th)
     newBills.push({
       id: `bill-elec-${year}-${monthStr}`,
       type: 'electricity',
       title: 'ค่าไฟฟ้า',
-      amount: 3000, // Default estimated
+      amount: 3000,
       dueDate: `${year}-${monthStr}-17`,
       status: 'pending',
       paidAt: null,
@@ -207,7 +261,6 @@ class DataService {
       note: 'คำนวณตามหน่วยมิเตอร์จริง'
     });
 
-    // 4. Internet (Due 21st)
     newBills.push({
       id: `bill-net-${year}-${monthStr}`,
       type: 'internet',
@@ -220,7 +273,6 @@ class DataService {
       note: 'รายเดือนคงที่'
     });
 
-    // 5. Pool cleaning (Due 27th)
     newBills.push({
       id: `bill-pool-${year}-${monthStr}`,
       type: 'pool_cleaning',
@@ -234,9 +286,8 @@ class DataService {
     });
 
     for (const b of newBills) {
-      bills.push(b);
+      await this.saveBill(b);
     }
-    localStorage.setItem(this.storageKey, JSON.stringify(bills));
     return { success: true, count: newBills.length };
   }
 }
