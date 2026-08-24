@@ -351,26 +351,29 @@ class DataService {
   // ─── Recurring Templates ────────────────────────────────────────────────────
 
   async getRecurringTemplates() {
+    let templates = [];
     if (this.db) {
       try {
         const snapshot = await this.db.collection('recurringTemplates').get();
         if (!snapshot.empty) {
-          const templates = [];
           snapshot.forEach(doc => templates.push({ id: doc.id, ...doc.data() }));
-          return templates;
-        } else {
-          // Seed default recurring templates to Firestore
-          console.log('Seeding default recurring templates...');
-          for (const tmpl of DEFAULT_RECURRING_TEMPLATES) {
-            await this.db.collection('recurringTemplates').doc(tmpl.id).set(tmpl);
-          }
-          return DEFAULT_RECURRING_TEMPLATES;
         }
       } catch (e) {
         console.error('Firestore getRecurringTemplates error:', e);
       }
     }
-    return [...DEFAULT_RECURRING_TEMPLATES];
+
+    if (templates.length === 0) {
+      templates = [...DEFAULT_RECURRING_TEMPLATES];
+      if (this.db) {
+        for (const tmpl of DEFAULT_RECURRING_TEMPLATES) {
+          try {
+            await this.db.collection('recurringTemplates').doc(tmpl.id).set(tmpl);
+          } catch (e) {}
+        }
+      }
+    }
+    return templates;
   }
 
   async saveRecurringTemplate(template) {
@@ -408,7 +411,7 @@ class DataService {
    * @param {number} month  (1-based)
    */
   _shouldGenerateForMonth(template, year, month) {
-    if (!template.enabled) return false;
+    if (template.enabled === false) return false;
     if (template.frequency === 'monthly') return true;
 
     const anchor = Number(template.anchorMonth) || 1;
