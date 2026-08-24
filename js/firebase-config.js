@@ -1,6 +1,7 @@
 /**
  * Firebase Config & Data Management Layer
- * Support Firebase Firestore real-time cloud database with auto-fallback to LocalStorage
+ * Cloud Firestore is the SINGLE SOURCE OF TRUTH.
+ * No local default reset on new devices.
  */
 
 const FIREBASE_CONFIG = {
@@ -19,6 +20,7 @@ const DEFAULT_SETTINGS = {
   firebaseConfig: FIREBASE_CONFIG
 };
 
+// Initial Seed Data (Used only once to seed Cloud Database if brand new)
 const SEED_BILLS = [
   {
     id: 'bill-rent-aug',
@@ -87,9 +89,6 @@ class DataService {
   }
 
   initStorage() {
-    if (!localStorage.getItem(this.storageKey)) {
-      localStorage.setItem(this.storageKey, JSON.stringify(SEED_BILLS));
-    }
     if (!localStorage.getItem(this.settingsKey)) {
       localStorage.setItem(this.settingsKey, JSON.stringify(DEFAULT_SETTINGS));
     }
@@ -105,7 +104,7 @@ class DataService {
         console.log('Firebase Firestore Initialized Successfully');
       }
     } catch (e) {
-      console.warn('Firebase initialization error, using LocalStorage:', e);
+      console.warn('Firebase initialization error:', e);
     }
   }
 
@@ -126,6 +125,7 @@ class DataService {
   }
 
   async getBills() {
+    // 1. Fetch live bills from Cloud Firestore
     if (this.db) {
       try {
         const snapshot = await this.db.collection('bills').get();
@@ -135,7 +135,8 @@ class DataService {
           localStorage.setItem(this.storageKey, JSON.stringify(cloudBills));
           return cloudBills;
         } else {
-          console.log('Seeding initial bills into Firestore Cloud Database...');
+          // If Firestore is completely empty on the cloud, seed SEED_BILLS once to Cloud Firestore
+          console.log('Firestore is empty. Seeding initial bills to Cloud Firestore...');
           for (const bill of SEED_BILLS) {
             await this.db.collection('bills').doc(bill.id).set(bill);
           }
@@ -143,14 +144,19 @@ class DataService {
           return SEED_BILLS;
         }
       } catch (e) {
-        console.warn('Firestore fetch failed, fallback to LocalStorage:', e);
+        console.error('Firestore fetch error:', e);
+        if (e.code === 'permission-denied') {
+          if (window.showToast) window.showToast('⚠️ โปรดเปิดสิทธิ์ Firestore Rules ใน Firebase Console');
+        }
       }
     }
 
+    // 2. Return local cached bills if offline
     try {
-      return JSON.parse(localStorage.getItem(this.storageKey) || '[]');
+      const cached = localStorage.getItem(this.storageKey);
+      return cached ? JSON.parse(cached) : [];
     } catch (e) {
-      return SEED_BILLS;
+      return [];
     }
   }
 
@@ -162,20 +168,13 @@ class DataService {
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billData.id).set(billData, { merge: true });
-        console.log('Successfully saved bill to Firestore:', billData.id);
+        console.log('Successfully saved bill to Cloud Firestore:', billData.id);
       } catch (e) {
         console.error('Firestore save failed:', e);
       }
     }
 
     const bills = await this.getBills();
-    const index = bills.findIndex(b => b.id === billData.id);
-    if (index !== -1) {
-      bills[index] = { ...bills[index], ...billData };
-    } else {
-      bills.push(billData);
-    }
-    localStorage.setItem(this.storageKey, JSON.stringify(bills));
     return billData;
   }
 
@@ -187,7 +186,7 @@ class DataService {
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billId).set(updateData, { merge: true });
-        console.log('Successfully updated bill status in Firestore:', billId);
+        console.log('Successfully updated bill status in Cloud Firestore:', billId);
       } catch (e) {
         console.error('Firestore status update failed:', e);
       }
@@ -195,12 +194,6 @@ class DataService {
 
     const bills = await this.getBills();
     const bill = bills.find(b => b.id === billId);
-    if (bill) {
-      bill.status = status;
-      if (slipImageUrl) bill.slipImageUrl = slipImageUrl;
-      bill.paidAt = paidTimestamp;
-      localStorage.setItem(this.storageKey, JSON.stringify(bills));
-    }
     return bill;
   }
 
@@ -208,15 +201,13 @@ class DataService {
     if (this.db) {
       try {
         await this.db.collection('bills').doc(billId).delete();
-        console.log('Successfully deleted bill from Firestore:', billId);
+        console.log('Successfully deleted bill from Cloud Firestore:', billId);
       } catch (e) {
         console.error('Firestore delete failed:', e);
       }
     }
 
-    let bills = await this.getBills();
-    bills = bills.filter(b => b.id !== billId);
-    localStorage.setItem(this.storageKey, JSON.stringify(bills));
+    await this.getBills();
   }
 
   async generateMonthlyBills(year, month) {
