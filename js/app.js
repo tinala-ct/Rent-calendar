@@ -179,7 +179,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // ─── Data Refresh ──────────────────────────────────────────────────────────
 
   async function refreshData() {
-    bills = await window.dataService.getBills();
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    // Fetches real bills + forecasted/projected bills from active templates
+    bills = await window.dataService.getBillsWithForecast(year, month);
     renderSummary();
     renderCalendar();
     renderBillsList();
@@ -209,7 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─── Calendar ──────────────────────────────────────────────────────────────
 
-  // Map bill type → CSS dot class name
   function getDotType(type) {
     if (type === 'common_fee') return 'common';
     if (type === 'pool_cleaning') return 'pool';
@@ -257,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const dot = document.createElement('div');
           const dotType = getDotType(b.type);
           dot.className = `dot dot-${dotType}${b.status === 'paid' ? ' dot-paid' : ''}`;
-          dot.title = `${b.title} (${b.amount} บ.)`;
+          dot.title = `${b.title} (${b.amount} บ.)${b.isScheduled ? ' [ตั้งค่าไว้]' : ''}`;
           dotsContainer.appendChild(dot);
         });
         cell.appendChild(dotsContainer);
@@ -306,6 +308,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const statusLabels = { paid: 'จ่ายแล้ว', pending: 'รอชำระ', overdue: 'เกินกำหนด' };
 
+      const scheduledBadge = bill.isScheduled
+        ? ` <span style="font-size:0.7rem; background:rgba(79,70,229,0.12); color:var(--primary); padding:2px 7px; border-radius:10px; font-weight:600;">📌 ตามรอบ</span>`
+        : '';
+
       const card = document.createElement('div');
       card.className = `bill-card type-${bill.type}`;
       card.innerHTML = `
@@ -313,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="bill-left">
             <div class="bill-icon-box type-${bill.type}">${TYPE_ICONS[bill.type] || '📄'}</div>
             <div class="bill-details">
-              <h3>${bill.title}</h3>
+              <h3>${bill.title}${scheduledBadge}</h3>
               <p>ครบกำหนด: ${formatThaiDate(bill.dueDate)}</p>
             </div>
           </div>
@@ -376,9 +382,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.btn-mark-paid').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.getAttribute('data-id');
-        await window.dataService.updateBillStatus(id, 'paid');
-        showToast('อัปเดตสถานะเป็นจ่ายแล้วเรียบร้อย');
-        refreshData();
+        const bill = bills.find(b => b.id === id);
+        if (bill) {
+          const billData = { ...bill, status: 'paid', paidAt: new Date().toISOString() };
+          delete billData.isScheduled;
+          await window.dataService.saveBill(billData);
+          showToast('อัปเดตสถานะเป็นจ่ายแล้วเรียบร้อย');
+          refreshData();
+        }
       });
     });
 
@@ -442,7 +453,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!activeBillForPay) return;
       let slipUrl = null;
       if (slipInput.files && slipInput.files[0]) slipUrl = slipPreviewImg.src;
-      await window.dataService.updateBillStatus(activeBillForPay.id, 'paid', slipUrl);
+
+      const billData = {
+        ...activeBillForPay,
+        status: 'paid',
+        paidAt: new Date().toISOString(),
+        ...(slipUrl ? { slipImageUrl: slipUrl } : {})
+      };
+      delete billData.isScheduled;
+      await window.dataService.saveBill(billData);
+
       payModal.classList.remove('active');
       showToast('แจ้งชำระเงินเรียบร้อยแล้ว ขอบคุณครับ');
       refreshData();
@@ -608,6 +628,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm(`ลบรายการ "${tmpl ? tmpl.title : id}" ออกจากรายการประจำ?`)) {
           await window.dataService.deleteRecurringTemplate(id);
           await loadAndRenderTemplates();
+          refreshData();
           showToast('ลบรายการประจำเรียบร้อยแล้ว');
         }
       });
@@ -700,6 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadAndRenderTemplates();
       if (recurringListView) recurringListView.style.display = 'block';
       if (recurringFormView) recurringFormView.style.display = 'none';
+      refreshData();
       showToast('บันทึกรายการประจำเรียบร้อยแล้ว');
     });
   }
@@ -715,15 +737,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.dataService && window.dataService.db) {
     try {
       // Live bills sync
-      window.dataService.db.collection('bills').onSnapshot(snapshot => {
-        if (!snapshot.empty) {
-          bills = [];
-          snapshot.forEach(doc => bills.push({ id: doc.id, ...doc.data() }));
-          localStorage.setItem(window.dataService.storageKey, JSON.stringify(bills));
-          renderSummary();
-          renderCalendar();
-          renderBillsList();
-        }
+      window.dataService.db.collection('bills').onSnapshot(() => {
+        refreshData();
       });
 
       // Live bank settings sync
@@ -736,18 +751,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      // Live recurring templates sync — re-render list if modal is open
-      if (isOwnerPage) {
-        window.dataService.db.collection('recurringTemplates').onSnapshot(snapshot => {
-          if (!snapshot.empty) {
-            recurringTemplates = [];
-            snapshot.forEach(doc => recurringTemplates.push({ id: doc.id, ...doc.data() }));
-            if (recurringModal && recurringModal.classList.contains('active') && recurringListView && recurringListView.style.display !== 'none') {
-              renderRecurringList();
-            }
-          }
-        });
-      }
+      // Live recurring templates sync
+      window.dataService.db.collection('recurringTemplates').onSnapshot(() => {
+        refreshData();
+        if (isOwnerPage && recurringModal && recurringModal.classList.contains('active') && recurringListView && recurringListView.style.display !== 'none') {
+          loadAndRenderTemplates();
+        }
+      });
 
     } catch (e) {
       console.warn('Firestore realtime listener error:', e);

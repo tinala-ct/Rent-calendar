@@ -268,6 +268,48 @@ class DataService {
     }
   }
 
+  async getBillsWithForecast(year, month) {
+    const monthStr = String(month).padStart(2, '0');
+    const prefix = `${year}-${monthStr}`;
+
+    const allBills = await this.getBills();
+    const templates = await this.getRecurringTemplates();
+
+    const monthRealBills = allBills.filter(b => b.dueDate && b.dueDate.startsWith(prefix));
+
+    const projectedBills = [];
+    for (const template of templates) {
+      if (!this._shouldGenerateForMonth(template, year, month)) continue;
+
+      const expectedId = `bill-${template.id}-${year}-${monthStr}`;
+      const dueDate = this._getSmartDueDate(year, month, template.dayOfMonth);
+
+      const alreadyExists = monthRealBills.some(b =>
+        b.id === expectedId ||
+        b.fromTemplate === template.id ||
+        (b.type === template.type && b.dueDate === dueDate)
+      );
+
+      if (!alreadyExists) {
+        projectedBills.push({
+          id: expectedId,
+          type: template.type,
+          title: template.title,
+          amount: Number(template.amount),
+          dueDate: dueDate,
+          status: 'pending',
+          paidAt: null,
+          slipImageUrl: null,
+          note: template.note || '',
+          fromTemplate: template.id,
+          isScheduled: true
+        });
+      }
+    }
+
+    return [...monthRealBills, ...projectedBills];
+  }
+
   async saveBill(billData) {
     if (!billData.id) {
       billData.id = 'bill-' + Date.now();
