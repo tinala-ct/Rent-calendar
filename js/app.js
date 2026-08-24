@@ -99,8 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Load Bank Settings
-  function loadBankSettings() {
-    const settings = window.dataService.getSettings();
+  async function loadBankSettings() {
+    const settings = await window.dataService.getSettings();
     if (bankNameEl) bankNameEl.textContent = settings.bankName;
     if (bankAccountNoEl) bankAccountNoEl.textContent = settings.bankAccountNo;
     if (bankAccountNameEl) bankAccountNameEl.textContent = settings.bankAccountName;
@@ -519,8 +519,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Owner Handlers: Settings Modal
   if (settingsBtn) {
-    settingsBtn.addEventListener('click', () => {
-      const settings = window.dataService.getSettings();
+    settingsBtn.addEventListener('click', async () => {
+      const settings = await window.dataService.getSettings();
       document.getElementById('settingBankName').value = settings.bankName;
       document.getElementById('settingAccountNo').value = settings.bankAccountNo;
       document.getElementById('settingAccountName').value = settings.bankAccountName;
@@ -533,18 +533,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (settingsForm) {
-    settingsForm.addEventListener('submit', (e) => {
+    settingsForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const current = window.dataService.getSettings();
+      const current = await window.dataService.getSettings();
       const updated = {
         ...current,
         bankName: document.getElementById('settingBankName').value,
         bankAccountNo: document.getElementById('settingAccountNo').value,
         bankAccountName: document.getElementById('settingAccountName').value
       };
-      window.dataService.saveSettings(updated);
+      await window.dataService.saveSettings(updated);
       settingsModal.classList.remove('active');
-      loadBankSettings();
+      await loadBankSettings();
       showToast('บันทึกข้อมูลการตั้งค่าเรียบร้อย');
     });
   }
@@ -566,6 +566,16 @@ document.addEventListener('DOMContentLoaded', () => {
           renderSummary();
           renderCalendar();
           renderBillsList();
+        }
+      });
+
+      // Listen for bank settings realtime updates across all devices
+      window.dataService.db.collection('settings').doc('bank').onSnapshot(doc => {
+        if (doc && doc.exists) {
+          const settings = doc.data();
+          if (bankNameEl) bankNameEl.textContent = settings.bankName;
+          if (bankAccountNoEl) bankAccountNoEl.textContent = settings.bankAccountNo;
+          if (bankAccountNameEl) bankAccountNameEl.textContent = settings.bankAccountName;
         }
       });
     } catch(e) {

@@ -1,6 +1,6 @@
 /**
  * Firebase Config & Data Management Layer
- * Cloud Firestore is the SINGLE SOURCE OF TRUTH.
+ * Cloud Firestore is the SINGLE SOURCE OF TRUTH for both Bills & Bank Settings.
  * No local default reset on new devices.
  */
 
@@ -14,9 +14,9 @@ const FIREBASE_CONFIG = {
 };
 
 const DEFAULT_SETTINGS = {
-  bankName: 'กสิกรไทย (KBank)',
-  bankAccountNo: '123-4-56789-0',
-  bankAccountName: 'นายเจ้าของ บ้านเช่า',
+  bankName: 'KKP_KiatnaKin-Phatra',
+  bankAccountNo: '2009609668',
+  bankAccountName: 'Chonnatee Tinala',
   firebaseConfig: FIREBASE_CONFIG
 };
 
@@ -108,7 +108,25 @@ class DataService {
     }
   }
 
-  getSettings() {
+  async getSettings() {
+    if (this.db) {
+      try {
+        const doc = await this.db.collection('settings').doc('bank').get();
+        if (doc.exists) {
+          const cloudSettings = doc.data();
+          localStorage.setItem(this.settingsKey, JSON.stringify(cloudSettings));
+          return cloudSettings;
+        } else {
+          // Seed default bank settings to Cloud Firestore
+          await this.db.collection('settings').doc('bank').set(DEFAULT_SETTINGS);
+          localStorage.setItem(this.settingsKey, JSON.stringify(DEFAULT_SETTINGS));
+          return DEFAULT_SETTINGS;
+        }
+      } catch (e) {
+        console.warn('Firestore settings fetch error:', e);
+      }
+    }
+
     try {
       const data = localStorage.getItem(this.settingsKey);
       let parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
@@ -119,9 +137,18 @@ class DataService {
     }
   }
 
-  saveSettings(settings) {
+  async saveSettings(settings) {
     settings.firebaseConfig = FIREBASE_CONFIG;
     localStorage.setItem(this.settingsKey, JSON.stringify(settings));
+
+    if (this.db) {
+      try {
+        await this.db.collection('settings').doc('bank').set(settings, { merge: true });
+        console.log('Successfully saved bank settings to Cloud Firestore');
+      } catch (e) {
+        console.error('Firestore save settings error:', e);
+      }
+    }
   }
 
   async getBills() {
