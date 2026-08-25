@@ -1,5 +1,6 @@
 /**
  * Rent Tracker Application Logic
+ * Supports English localization for Tenant Portal and Thai for Owner Dashboard
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -68,11 +69,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const recurringTmplFrequency = document.getElementById('recurringTmplFrequency');
   const anchorMonthGroup = document.getElementById('anchorMonthGroup');
 
-  // ─── Constants ──────────────────────────────────────────────────────────────
+  // ─── Constants & Localization ───────────────────────────────────────────────
 
   const THAI_MONTHS = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
+
+  const EN_MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
   const THAI_MONTHS_SHORT = [
@@ -80,15 +86,10 @@ document.addEventListener('DOMContentLoaded', () => {
     'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
   ];
 
-  const TYPE_NAMES = {
-    rent: 'ค่าเช่า',
-    common_fee: 'ค่าส่วนกลาง',
-    electricity: 'ค่าไฟฟ้า',
-    internet: 'ค่าอินเทอร์เน็ต',
-    pool_cleaning: 'ค่าทำสระว่ายน้ำ',
-    garbage: 'ค่าเก็บขยะ',
-    other: 'อื่นๆ'
-  };
+  const EN_MONTHS_SHORT = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
 
   const TYPE_ICONS = {
     rent: '🏠',
@@ -132,13 +133,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }).format(amount);
   }
 
-  function formatThaiDate(dateStr) {
+  function formatDate(dateStr) {
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
     const day = parseInt(parts[2], 10);
     const month = parseInt(parts[1], 10) - 1;
+
+    if (!isOwnerPage) {
+      // English date for tenant: e.g. "30 August 2026"
+      return `${day} ${EN_MONTHS[month]} ${parts[0]}`;
+    }
+    // Thai date for owner: e.g. "30 สิงหาคม 2569"
     const year = parseInt(parts[0], 10) + 543;
     return `${day} ${THAI_MONTHS[month]} ${year}`;
+  }
+
+  function getDisplayTitle(bill) {
+    if (isOwnerPage) return bill.title;
+
+    // Standard English translations for Tenant view
+    const titleMap = {
+      'ค่าเช่าบ้าน': 'House Rent',
+      'ค่าไฟฟ้า': 'Electricity Fee',
+      'ค่าอินเทอร์เน็ต': 'Internet Fee',
+      'ค่าส่วนกลาง': 'Common Fee & Water',
+      'ค่าทำความสะอาดสระ': 'Pool Cleaning Fee',
+      'ค่าทำความสะอาดสระว่ายน้ำ': 'Pool Cleaning Fee',
+      'ค่าเก็บขยะ': 'Garbage Collection Fee'
+    };
+
+    for (const [key, val] of Object.entries(titleMap)) {
+      if (bill.title && bill.title.includes(key)) return val;
+    }
+
+    const typeFallback = {
+      rent: 'House Rent',
+      common_fee: 'Common Fee & Water',
+      electricity: 'Electricity Fee',
+      internet: 'Internet Fee',
+      pool_cleaning: 'Pool Cleaning Fee',
+      garbage: 'Garbage Collection Fee',
+      other: 'Other Expense'
+    };
+
+    return typeFallback[bill.type] || bill.title;
   }
 
   // ─── Bank Settings ─────────────────────────────────────────────────────────
@@ -154,8 +192,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateMonthHeader() {
     const month = currentDate.getMonth();
-    const yearStr = currentDate.getFullYear() + 543;
-    monthYearLabel.textContent = `${THAI_MONTHS[month]} ${yearStr}`;
+    if (!isOwnerPage) {
+      // Tenant: English Header (e.g. "August 2026")
+      monthYearLabel.textContent = `${EN_MONTHS[month]} ${currentDate.getFullYear()}`;
+    } else {
+      // Owner: Thai Header (e.g. "สิงหาคม 2569")
+      const yearStr = currentDate.getFullYear() + 543;
+      monthYearLabel.textContent = `${THAI_MONTHS[month]} ${yearStr}`;
+    }
   }
 
   if (prevMonthBtn) {
@@ -206,8 +250,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (summaryProgressBar) {
       summaryProgressBar.style.width = total > 0 ? `${(paid / total) * 100}%` : '0%';
     }
-    if (summaryStatPaid) summaryStatPaid.textContent = `${paidCount} รายการ`;
-    if (summaryStatPending) summaryStatPending.textContent = `${pendingCount} รายการ`;
+
+    if (summaryStatPaid) {
+      summaryStatPaid.textContent = !isOwnerPage ? `${paidCount} Items` : `${paidCount} รายการ`;
+    }
+    if (summaryStatPending) {
+      summaryStatPending.textContent = !isOwnerPage ? `${pendingCount} Items` : `${pendingCount} รายการ`;
+    }
   }
 
   // ─── Calendar ──────────────────────────────────────────────────────────────
@@ -258,8 +307,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dayBills.forEach(b => {
           const dot = document.createElement('div');
           const dotType = getDotType(b.type);
+          const titleText = getDisplayTitle(b);
           dot.className = `dot dot-${dotType}${b.status === 'paid' ? ' dot-paid' : ''}`;
-          dot.title = `${b.title} (${b.amount} บ.)${b.isScheduled ? ' [ตั้งค่าไว้]' : ''}`;
+          dot.title = `${titleText} (${formatCurrency(b.amount)})`;
           dotsContainer.appendChild(dot);
         });
         cell.appendChild(dotsContainer);
@@ -292,10 +342,13 @@ document.addEventListener('DOMContentLoaded', () => {
     displayBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
     if (displayBills.length === 0) {
+      const emptyMsg = !isOwnerPage
+        ? (selectedDate ? 'No bills due on this date' : 'No bill items for this month')
+        : (selectedDate ? 'ไม่มีบิลที่ต้องชำระในวันนี้' : 'ไม่มีรายการบิลในเดือนนี้');
       billsList.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">📋</div>
-          <p>${selectedDate ? 'ไม่มีบิลที่ต้องชำระในวันนี้' : 'ไม่มีรายการบิลในเดือนนี้'}</p>
+          <p>${emptyMsg}</p>
         </div>`;
       return;
     }
@@ -306,11 +359,18 @@ document.addEventListener('DOMContentLoaded', () => {
       let currentStatus = bill.status;
       if (currentStatus === 'pending' && bill.dueDate < todayStr) currentStatus = 'overdue';
 
-      const statusLabels = { paid: 'จ่ายแล้ว', pending: 'รอชำระ', overdue: 'เกินกำหนด' };
+      const statusLabels = !isOwnerPage
+        ? { paid: 'Paid', pending: 'Pending', overdue: 'Overdue' }
+        : { paid: 'จ่ายแล้ว', pending: 'รอชำระ', overdue: 'เกินกำหนด' };
 
       const scheduledBadge = bill.isScheduled
-        ? ` <span style="font-size:0.7rem; background:rgba(79,70,229,0.12); color:var(--primary); padding:2px 7px; border-radius:10px; font-weight:600;">📌 ตามรอบ</span>`
+        ? (!isOwnerPage
+            ? ` <span style="font-size:0.7rem; background:rgba(79,70,229,0.12); color:var(--primary); padding:2px 7px; border-radius:10px; font-weight:600;">📌 Recurring</span>`
+            : ` <span style="font-size:0.7rem; background:rgba(79,70,229,0.12); color:var(--primary); padding:2px 7px; border-radius:10px; font-weight:600;">📌 ตามรอบ</span>`)
         : '';
+
+      const dueLabel = !isOwnerPage ? 'Due Date:' : 'ครบกำหนด:';
+      const displayTitle = getDisplayTitle(bill);
 
       const card = document.createElement('div');
       card.className = `bill-card type-${bill.type}`;
@@ -319,8 +379,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="bill-left">
             <div class="bill-icon-box type-${bill.type}">${TYPE_ICONS[bill.type] || '📄'}</div>
             <div class="bill-details">
-              <h3>${bill.title}${scheduledBadge}</h3>
-              <p>ครบกำหนด: ${formatThaiDate(bill.dueDate)}</p>
+              <h3>${displayTitle}${scheduledBadge}</h3>
+              <p>${dueLabel} ${formatDate(bill.dueDate)}</p>
             </div>
           </div>
           <div class="bill-right">
@@ -341,10 +401,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let btns = '';
     if (!isOwner) {
       if (bill.status === 'paid') {
-        if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 ดูสลิป</button>`;
-        btns += `<span style="font-size:0.8rem; color:var(--status-paid-text); font-weight:600;">✓ ชำระแล้ว</span>`;
+        if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 View Slip</button>`;
+        btns += `<span style="font-size:0.8rem; color:var(--status-paid-text); font-weight:600;">✓ Paid</span>`;
       } else {
-        btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}">💳 แจ้งชำระเงิน</button>`;
+        btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}">💳 Submit Payment</button>`;
       }
     } else {
       if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 ดูสลิป</button>`;
@@ -361,7 +421,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const id = e.target.getAttribute('data-id');
         activeBillForPay = bills.find(b => b.id === id);
         if (activeBillForPay) {
-          document.getElementById('payModalTitle').textContent = `แจ้งชำระ: ${activeBillForPay.title}`;
+          const displayTitle = getDisplayTitle(activeBillForPay);
+          document.getElementById('payModalTitle').textContent = !isOwnerPage
+            ? `Submit Payment: ${displayTitle}`
+            : `แจ้งชำระ: ${activeBillForPay.title}`;
           document.getElementById('payModalAmount').textContent = formatCurrency(activeBillForPay.amount);
           slipPreviewContainer.style.display = 'none';
           payModal.classList.add('active');
@@ -429,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
     copyBankBtn.addEventListener('click', async () => {
       const settings = await window.dataService.getSettings();
       navigator.clipboard.writeText(settings.bankAccountNo.replace(/-/g, ''));
-      showToast('คัดลอกเลขบัญชีแล้ว!');
+      showToast(!isOwnerPage ? 'Account number copied!' : 'คัดลอกเลขบัญชีแล้ว!');
     });
   }
 
@@ -464,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await window.dataService.saveBill(billData);
 
       payModal.classList.remove('active');
-      showToast('แจ้งชำระเงินเรียบร้อยแล้ว ขอบคุณครับ');
+      showToast(!isOwnerPage ? 'Payment submitted successfully. Thank you!' : 'แจ้งชำระเงินเรียบร้อยแล้ว ขอบคุณครับ');
       refreshData();
     });
   }
