@@ -186,6 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bankNameEl) bankNameEl.textContent = settings.bankName;
     if (bankAccountNoEl) bankAccountNoEl.textContent = settings.bankAccountNo;
     if (bankAccountNameEl) bankAccountNameEl.textContent = settings.bankAccountName;
+    const bankIconEl = document.getElementById('bankIcon');
+    if (bankIconEl) bankIconEl.style.backgroundColor = settings.bankColor || 'rgb(87, 82, 133)';
   }
 
   // ─── Header & Navigation ───────────────────────────────────────────────────
@@ -596,7 +598,23 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('settingBankName').value = settings.bankName;
       document.getElementById('settingAccountNo').value = settings.bankAccountNo;
       document.getElementById('settingAccountName').value = settings.bankAccountName;
+      const colorVal = settings.bankColor || 'rgb(87, 82, 133)';
+      const textInput = document.getElementById('settingBankColor');
+      const pickerInput = document.getElementById('settingBankColorPicker');
+      if (textInput) textInput.value = colorVal;
+      if (pickerInput) {
+        if (colorVal.startsWith('#')) pickerInput.value = colorVal;
+        else pickerInput.value = '#575285';
+      }
       settingsModal.classList.add('active');
+    });
+  }
+
+  const settingBankColorPicker = document.getElementById('settingBankColorPicker');
+  const settingBankColor = document.getElementById('settingBankColor');
+  if (settingBankColorPicker && settingBankColor) {
+    settingBankColorPicker.addEventListener('input', (e) => {
+      settingBankColor.value = e.target.value;
     });
   }
 
@@ -610,7 +628,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ...current,
         bankName: document.getElementById('settingBankName').value,
         bankAccountNo: document.getElementById('settingAccountNo').value,
-        bankAccountName: document.getElementById('settingAccountName').value
+        bankAccountName: document.getElementById('settingAccountName').value,
+        bankColor: document.getElementById('settingBankColor').value || 'rgb(87, 82, 133)'
       };
       await window.dataService.saveSettings(updated);
       settingsModal.classList.remove('active');
@@ -811,6 +830,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (bankNameEl) bankNameEl.textContent = settings.bankName;
           if (bankAccountNoEl) bankAccountNoEl.textContent = settings.bankAccountNo;
           if (bankAccountNameEl) bankAccountNameEl.textContent = settings.bankAccountName;
+          const bankIconEl = document.getElementById('bankIcon');
+          if (bankIconEl) bankIconEl.style.backgroundColor = settings.bankColor || 'rgb(87, 82, 133)';
         }
       });
 

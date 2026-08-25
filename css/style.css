@@ -268,7 +268,7 @@ body {
   width: 44px;
   height: 44px;
   border-radius: var(--radius-md);
-  background: #00A950; /* KBank green or generic bank theme */
+  background: rgb(87, 82, 133);
   color: white;
   display: flex;
   align-items: center;

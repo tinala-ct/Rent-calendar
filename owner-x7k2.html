@@ -176,6 +176,14 @@
           <input type="text" class="form-control" id="settingAccountName" placeholder="นาย..." required>
         </div>
 
+        <div class="form-group">
+          <label>สีพื้นหลังโลโก้ธนาคาร (Bank Logo Color)</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="color" id="settingBankColorPicker" value="#575285" style="width:48px; height:42px; border:1px solid var(--border-color); border-radius:10px; cursor:pointer; background:none; padding:2px;">
+            <input type="text" class="form-control" id="settingBankColor" placeholder="rgb(87, 82, 133) หรือ #575285" required style="flex:1;">
+          </div>
+        </div>
+
         <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px;">
           💾 บันทึกการตั้งค่า
         </button>
@@ -303,7 +311,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <!-- App Scripts -->
-  <script src="js/firebase-config.js?v=2.0.0"></script>
-  <script src="js/app.js?v=2.0.0"></script>
+  <script src="js/firebase-config.js?v=2.1.0"></script>
+  <script src="js/app.js?v=2.1.0"></script>
 </body>
 </html>

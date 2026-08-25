@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   bankName: 'KKP_KiatnaKin-Phatra',
   bankAccountNo: '2009609668',
   bankAccountName: 'Chonnatee Tinala',
+  bankColor: 'rgb(87, 82, 133)',
   firebaseConfig: FIREBASE_CONFIG
 };
 
