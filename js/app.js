@@ -128,9 +128,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
   function formatCurrency(amount) {
+    const num = Number(amount) || 0;
     return new Intl.NumberFormat('th-TH', {
-      style: 'currency', currency: 'THB', maximumFractionDigits: 0
-    }).format(amount);
+      style: 'currency',
+      currency: 'THB',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num);
   }
 
   function formatDate(dateStr) {
@@ -560,7 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
         id: document.getElementById('billIdInput').value || null,
         type: document.getElementById('billTypeSelect').value,
         title: document.getElementById('billTitleInput').value,
-        amount: Number(document.getElementById('billAmountInput').value),
+        amount: parseFloat(document.getElementById('billAmountInput').value) || 0,
         dueDate: document.getElementById('billDueDateInput').value,
         status: document.getElementById('billStatusSelect').value,
         note: document.getElementById('billNoteInput').value,
@@ -682,7 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${!tmpl.enabled ? '<span style="font-size:0.7rem; background:#ef4444; color:white; padding:1px 6px; border-radius:8px;">ปิด</span>' : ''}
               </div>
               <div style="font-size:0.8rem; color:var(--text-secondary);">
-                ฿${Number(tmpl.amount).toLocaleString()} · วันที่ ${tmpl.dayOfMonth} · ${freqLabel}${anchorLabel}
+                ${formatCurrency(tmpl.amount)} · วันที่ ${tmpl.dayOfMonth} · ${freqLabel}${anchorLabel}
               </div>
               ${tmpl.note ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:3px;">💬 ${tmpl.note}</div>` : ''}
             </div>
@@ -792,7 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
         id: document.getElementById('recurringTmplId').value || null,
         type: document.getElementById('recurringTmplType').value,
         title: document.getElementById('recurringTmplTitle').value,
-        amount: Number(document.getElementById('recurringTmplAmount').value),
+        amount: parseFloat(document.getElementById('recurringTmplAmount').value) || 0,
         dayOfMonth: Number(document.getElementById('recurringTmplDay').value),
         frequency: document.getElementById('recurringTmplFrequency').value,
         anchorMonth: Number(document.getElementById('recurringTmplAnchorMonth').value),
