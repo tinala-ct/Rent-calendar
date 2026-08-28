@@ -838,3 +838,29 @@ body {
   font-size: 1.2rem;
   cursor: pointer;
 }
+
+/* Auth Lock Modal */
+body.auth-locked .app-container {
+  filter: blur(12px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.auth-modal {
+  z-index: 1000 !important;
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  align-items: center !important;
+}
+
+.auth-card {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px;
+  width: 92%;
+  max-width: 400px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+  text-align: center;
+}

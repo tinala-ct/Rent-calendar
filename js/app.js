@@ -851,4 +851,117 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn('Firestore realtime listener error:', e);
     }
   }
+
+  // ─── Owner SHA-256 Authentication Gatekeeper ──────────────────────────────
+
+  const ownerAuthModal = document.getElementById('ownerAuthModal');
+  const ownerLoginForm = document.getElementById('ownerLoginForm');
+  const ownerSetupForm = document.getElementById('ownerSetupForm');
+  const loginForm = document.getElementById('loginForm');
+  const setupForm = document.getElementById('setupForm');
+  const loginErrorMsg = document.getElementById('loginErrorMsg');
+  const setupErrorMsg = document.getElementById('setupErrorMsg');
+  const changePasswordBtn = document.getElementById('changePasswordBtn');
+
+  async function initOwnerAuth() {
+    if (!isOwnerPage || !ownerAuthModal) return;
+
+    // Check session
+    const isAuthed = sessionStorage.getItem('owner_authenticated') === 'true';
+    if (isAuthed) {
+      document.body.classList.remove('auth-locked');
+      ownerAuthModal.classList.remove('active');
+      return;
+    }
+
+    // Lock screen until authenticated
+    document.body.classList.add('auth-locked');
+    ownerAuthModal.classList.add('active');
+
+    const authSettings = await window.dataService.getAuthSettings();
+    if (!authSettings || !authSettings.ownerPasswordHash) {
+      // First-time setup mode
+      if (ownerLoginForm) ownerLoginForm.style.display = 'none';
+      if (ownerSetupForm) ownerSetupForm.style.display = 'block';
+    } else {
+      // Normal login mode
+      if (ownerLoginForm) ownerLoginForm.style.display = 'block';
+      if (ownerSetupForm) ownerSetupForm.style.display = 'none';
+    }
+  }
+
+  if (isOwnerPage) {
+    initOwnerAuth();
+
+    // Login Form Submit
+    if (loginForm) {
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const pass = document.getElementById('loginPasswordInput').value;
+        const inputHash = await window.dataService.hashPassword(pass);
+        const authSettings = await window.dataService.getAuthSettings();
+
+        if (authSettings && authSettings.ownerPasswordHash === inputHash) {
+          sessionStorage.setItem('owner_authenticated', 'true');
+          document.body.classList.remove('auth-locked');
+          ownerAuthModal.classList.remove('active');
+          if (loginErrorMsg) loginErrorMsg.style.display = 'none';
+          showToast('ปลดล็อกเข้าสู่ระบบสำเร็จ');
+        } else {
+          if (loginErrorMsg) loginErrorMsg.style.display = 'block';
+        }
+      });
+    }
+
+    // First-Time Setup Form Submit
+    if (setupForm) {
+      setupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newPass = document.getElementById('setupPasswordInput').value;
+        const confirmPass = document.getElementById('setupConfirmInput').value;
+
+        if (newPass !== confirmPass) {
+          if (setupErrorMsg) {
+            setupErrorMsg.textContent = '❌ รหัสผ่านทั้งสองช่องไม่ตรงกัน';
+            setupErrorMsg.style.display = 'block';
+          }
+          return;
+        }
+
+        const hashed = await window.dataService.hashPassword(newPass);
+        await window.dataService.saveAuthSettings(hashed);
+        sessionStorage.setItem('owner_authenticated', 'true');
+        document.body.classList.remove('auth-locked');
+        ownerAuthModal.classList.remove('active');
+        showToast('ตั้งรหัสผ่านเจ้าของบ้านเรียบร้อยแล้ว');
+      });
+    }
+
+    // Change Password in Settings
+    if (changePasswordBtn) {
+      changePasswordBtn.addEventListener('click', async () => {
+        const oldPass = document.getElementById('changeOldPassword').value;
+        const newPass = document.getElementById('changeNewPassword').value;
+
+        if (!oldPass || !newPass) {
+          showToast('กรุณากรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่', true);
+          return;
+        }
+
+        const authSettings = await window.dataService.getAuthSettings();
+        const oldHash = await window.dataService.hashPassword(oldPass);
+
+        if (authSettings && authSettings.ownerPasswordHash !== oldHash) {
+          showToast('รหัสผ่านปัจจุบันไม่ถูกต้อง', true);
+          return;
+        }
+
+        const newHash = await window.dataService.hashPassword(newPass);
+        await window.dataService.saveAuthSettings(newHash);
+        document.getElementById('changeOldPassword').value = '';
+        document.getElementById('changeNewPassword').value = '';
+        showToast('อัปเดตรหัสผ่านใหม่เรียบร้อยแล้ว');
+      });
+    }
+  }
 });

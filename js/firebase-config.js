@@ -233,6 +233,44 @@ class DataService {
     }
   }
 
+  // ─── SHA-256 Auth & Security Layer ──────────────────────────────────────
+
+  async hashPassword(password) {
+    const msgBuffer = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async getAuthSettings() {
+    if (this.db) {
+      try {
+        const doc = await this.db.collection('settings').doc('auth').get();
+        if (doc.exists) {
+          return doc.data();
+        }
+      } catch (e) {
+        console.warn('Firestore auth settings fetch error:', e);
+      }
+    }
+    const localAuth = localStorage.getItem('rent_tracker_auth_v1');
+    return localAuth ? JSON.parse(localAuth) : null;
+  }
+
+  async saveAuthSettings(passwordHash) {
+    const authData = { ownerPasswordHash: passwordHash, updatedAt: new Date().toISOString() };
+    localStorage.setItem('rent_tracker_auth_v1', JSON.stringify(authData));
+    if (this.db) {
+      try {
+        await this.db.collection('settings').doc('auth').set(authData, { merge: true });
+        console.log('Saved auth settings to Cloud Firestore');
+      } catch (e) {
+        console.error('Firestore save auth settings error:', e);
+      }
+    }
+    return authData;
+  }
+
   // ─── Bills ──────────────────────────────────────────────────────────────────
 
   async getBills() {

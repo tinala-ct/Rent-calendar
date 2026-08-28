@@ -187,6 +187,23 @@
         <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px;">
           💾 บันทึกการตั้งค่า
         </button>
+
+        <hr style="margin: 18px 0; border: none; border-top: 1px dashed var(--border-color);">
+        <h4 style="font-size:0.9rem; font-weight:600; margin-bottom:12px; color:var(--text-primary);">🔐 เปลี่ยนรหัสผ่านเจ้าของบ้าน (SHA-256)</h4>
+        
+        <div class="form-group">
+          <label>รหัสผ่านปัจจุบัน</label>
+          <input type="password" class="form-control" id="changeOldPassword" placeholder="กรอกรหัสผ่านปัจจุบัน">
+        </div>
+
+        <div class="form-group">
+          <label>รหัสผ่านใหม่</label>
+          <input type="password" class="form-control" id="changeNewPassword" placeholder="ตั้งรหัสผ่านใหม่">
+        </div>
+
+        <button type="button" class="btn btn-secondary btn-full" id="changePasswordBtn">
+          🔒 อัปเดตรหัสผ่านใหม่
+        </button>
       </form>
     </div>
   </div>
@@ -307,11 +324,55 @@
     </div>
   </div>
 
+  <!-- Modal: Owner Auth Lock / Setup Modal -->
+  <div class="modal-backdrop auth-modal active" id="ownerAuthModal">
+    <div class="auth-card">
+
+      <!-- Login Form (If Password already set) -->
+      <div id="ownerLoginForm">
+        <div style="font-size: 2.5rem; margin-bottom: 8px;">🔐</div>
+        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 6px;">เข้าสู่ระบบเจ้าของบ้าน</h2>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">กรุณากรอกรหัสผ่านเพื่อเข้าใช้งานหน้าผู้ดูแลระบบ</p>
+
+        <form id="loginForm">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <input type="password" class="form-control" id="loginPasswordInput" placeholder="กรอกรหัสผ่าน / PIN" required style="text-align: center; font-size: 1.1rem; letter-spacing: 2px;">
+          </div>
+          <div id="loginErrorMsg" style="color: #EF4444; font-size: 0.8rem; margin-bottom: 12px; display: none;">❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง</div>
+          <button type="submit" class="btn btn-primary btn-full">🔓 ปลดล็อกเข้าใช้งาน</button>
+        </form>
+      </div>
+
+      <!-- Setup Form (If First-time Password Setup) -->
+      <div id="ownerSetupForm" style="display: none;">
+        <div style="font-size: 2.5rem; margin-bottom: 8px;">⚙️</div>
+        <h2 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 6px;">ตั้งรหัสผ่านเจ้าของบ้านครั้งแรก</h2>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.4;">
+          ระบบจะแปลงรหัสผ่านเป็น <strong>SHA-256 Hash</strong> อัตโนมัติ ปลอดภัยแม้ส่องดูโค้ดบน GitHub
+        </p>
+
+        <form id="setupForm">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label style="text-align:left;">ตั้งรหัสผ่านใหม่ (เช่น PIN 6 หลัก)</label>
+            <input type="password" class="form-control" id="setupPasswordInput" placeholder="กรอกรหัสผ่านที่คุณต้องการ" required minlength="4">
+          </div>
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="text-align:left;">ยืนยันรหัสผ่านอีกครั้ง</label>
+            <input type="password" class="form-control" id="setupConfirmInput" placeholder="กรอกรหัสผ่านซ้ำอีกครั้ง" required minlength="4">
+          </div>
+          <div id="setupErrorMsg" style="color: #EF4444; font-size: 0.8rem; margin-bottom: 12px; display: none;"></div>
+          <button type="submit" class="btn btn-primary btn-full">💾 บันทึกรหัสผ่านเจ้าของบ้าน</button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <!-- App Scripts -->
-  <script src="js/firebase-config.js?v=2.2.0"></script>
-  <script src="js/app.js?v=2.2.0"></script>
+  <script src="js/firebase-config.js?v=3.0.0"></script>
+  <script src="js/app.js?v=3.0.0"></script>
 </body>
 </html>
