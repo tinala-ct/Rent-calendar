@@ -447,14 +447,29 @@ document.addEventListener('DOMContentLoaded', () => {
     let btns = '';
     if (!isOwner) {
       if (bill.status === 'paid') {
-        if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 View Slip</button>`;
+        if (bill.slipImageUrl) {
+          btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 View Slip</button>`;
+          btns += `<button class="btn btn-secondary btn-sm btn-pay" data-id="${bill.id}">✏️ Change Slip</button>`;
+        } else {
+          btns += `<button class="btn btn-secondary btn-sm btn-pay" data-id="${bill.id}">📎 Upload Slip</button>`;
+        }
         btns += `<span style="font-size:0.8rem; color:var(--status-paid-text); font-weight:600;">✓ Paid</span>`;
       } else if (bill.status === 'unconfirmed') {
         btns += `<span style="font-size:0.8rem; color:#F59E0B; font-weight:600; background:rgba(245,158,11,0.1); padding:4px 8px; border-radius:8px;">⏳ Pending Meter/Bill Confirmation</span>`;
       } else if (bill.status === 'paid_by_owner') {
-        btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}" style="background-color:#06B6D4;">💳 Reimburse Owner</button>`;
+        if (bill.slipImageUrl) {
+          btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 View Slip</button>`;
+          btns += `<button class="btn btn-secondary btn-sm btn-pay" data-id="${bill.id}">✏️ Change Slip</button>`;
+        } else {
+          btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}" style="background-color:#06B6D4;">💳 Reimburse Owner</button>`;
+        }
       } else {
-        btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}">💳 Submit Payment</button>`;
+        if (bill.slipImageUrl) {
+          btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 View Slip</button>`;
+          btns += `<button class="btn btn-secondary btn-sm btn-pay" data-id="${bill.id}">✏️ Change Slip</button>`;
+        } else {
+          btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}">💳 Submit Payment</button>`;
+        }
       }
     } else {
       if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 ดูสลิป</button>`;
@@ -480,19 +495,44 @@ document.addEventListener('DOMContentLoaded', () => {
         const id = e.currentTarget.getAttribute('data-id');
         activeBillForPay = bills.find(b => b.id === id);
         if (activeBillForPay) {
+          delete activeBillForPay._pendingSlipRemove;
           const displayTitle = getDisplayTitle(activeBillForPay);
+          const hasExistingSlip = !!activeBillForPay.slipImageUrl;
           const isReimburse = activeBillForPay.status === 'paid_by_owner';
           
           let headerText = '';
           if (!isOwnerPage) {
-            headerText = isReimburse ? `Reimburse Owner: ${displayTitle}` : `Submit Payment: ${displayTitle}`;
+            if (hasExistingSlip) {
+              headerText = `Edit/Update Slip: ${displayTitle}`;
+            } else if (isReimburse) {
+              headerText = `Reimburse Owner: ${displayTitle}`;
+            } else {
+              headerText = `Submit Payment: ${displayTitle}`;
+            }
           } else {
-            headerText = isReimburse ? `ชำระคืนเจ้าของ: ${activeBillForPay.title}` : `แจ้งชำระ: ${activeBillForPay.title}`;
+            headerText = `จัดการสลิป: ${activeBillForPay.title}`;
           }
 
           document.getElementById('payModalTitle').textContent = headerText;
           document.getElementById('payModalAmount').textContent = formatCurrency(activeBillForPay.amount);
-          slipPreviewContainer.style.display = 'none';
+          
+          const removeSlipBtn = document.getElementById('removeSlipBtn');
+          const paySubmitBtn = document.getElementById('paySubmitBtn');
+
+          if (slipInput) slipInput.value = '';
+
+          if (hasExistingSlip) {
+            slipPreviewImg.src = activeBillForPay.slipImageUrl;
+            slipPreviewContainer.style.display = 'block';
+            if (removeSlipBtn) removeSlipBtn.style.display = 'inline-block';
+            if (paySubmitBtn) paySubmitBtn.textContent = '💾 Save Updated Slip';
+          } else {
+            slipPreviewImg.src = '';
+            slipPreviewContainer.style.display = 'none';
+            if (removeSlipBtn) removeSlipBtn.style.display = 'none';
+            if (paySubmitBtn) paySubmitBtn.textContent = '✓ Confirm Payment Submission';
+          }
+
           payModal.classList.add('active');
         }
       });
@@ -583,6 +623,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // ─── Pay Modal ─────────────────────────────────────────────────────────────
 
   if (payForm) {
+    const removeSlipBtn = document.getElementById('removeSlipBtn');
+    if (removeSlipBtn) {
+      removeSlipBtn.addEventListener('click', () => {
+        if (slipInput) slipInput.value = '';
+        if (slipPreviewImg) slipPreviewImg.src = '';
+        if (slipPreviewContainer) slipPreviewContainer.style.display = 'none';
+        if (activeBillForPay) {
+          activeBillForPay._pendingSlipRemove = true;
+        }
+        showToast(!isOwnerPage ? 'Slip removed. Click Save to confirm.' : 'ลบรูปสลิปแล้ว กดบันทึกเพื่อยืนยัน');
+      });
+    }
+
     slipInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -590,6 +643,8 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = (ev) => {
           slipPreviewImg.src = ev.target.result;
           slipPreviewContainer.style.display = 'block';
+          if (removeSlipBtn) removeSlipBtn.style.display = 'inline-block';
+          if (activeBillForPay) delete activeBillForPay._pendingSlipRemove;
         };
         reader.readAsDataURL(file);
       }
@@ -598,20 +653,35 @@ document.addEventListener('DOMContentLoaded', () => {
     payForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!activeBillForPay) return;
-      let slipUrl = null;
-      if (slipInput.files && slipInput.files[0]) slipUrl = slipPreviewImg.src;
+
+      let slipUrl = activeBillForPay.slipImageUrl || null;
+
+      if (activeBillForPay._pendingSlipRemove) {
+        slipUrl = null;
+      }
+
+      if (slipInput.files && slipInput.files[0]) {
+        slipUrl = slipPreviewImg.src;
+      }
+
+      let newStatus = activeBillForPay.status;
+      if (newStatus === 'pending' || newStatus === 'overdue' || newStatus === 'paid_by_owner') {
+        if (slipUrl) newStatus = 'paid';
+      }
 
       const billData = {
         ...activeBillForPay,
-        status: 'paid',
-        paidAt: new Date().toISOString(),
-        ...(slipUrl ? { slipImageUrl: slipUrl } : {})
+        status: newStatus,
+        slipImageUrl: slipUrl,
+        paidAt: slipUrl ? (activeBillForPay.paidAt || new Date().toISOString()) : (newStatus === 'paid' ? activeBillForPay.paidAt : null)
       };
       delete billData.isScheduled;
+      delete billData._pendingSlipRemove;
+
       await window.dataService.saveBill(billData);
 
       payModal.classList.remove('active');
-      showToast(!isOwnerPage ? 'Payment submitted successfully. Thank you!' : 'แจ้งชำระเงินเรียบร้อยแล้ว ขอบคุณครับ');
+      showToast(!isOwnerPage ? 'Payment slip updated successfully!' : 'อัปเดตสลิปชำระเงินเรียบร้อยแล้ว');
       refreshData();
     });
   }

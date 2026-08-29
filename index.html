@@ -106,21 +106,26 @@
 
       <form id="payForm">
         <div class="form-group">
-          <label>Attach Payment Slip</label>
+          <label>Attach / Change Payment Slip</label>
           <div class="file-upload-box">
             <span style="font-size:2rem;">📸</span>
-            <p style="font-size:0.85rem; font-weight:600; margin-top:4px;">Tap to select slip image</p>
+            <p style="font-size:0.85rem; font-weight:600; margin-top:4px;">Tap to select or change slip image</p>
             <p style="font-size:0.75rem; color:var(--text-muted);">Supports JPG, PNG formats</p>
-            <input type="file" id="slipInput" accept="image/*" required>
+            <input type="file" id="slipInput" accept="image/*">
           </div>
         </div>
 
-        <div class="slip-preview-container" id="slipPreviewContainer" style="display:none;">
-          <img id="slipPreviewImg" src="" alt="Slip Preview">
+        <div class="slip-preview-container" id="slipPreviewContainer" style="display:none; text-align:center; margin-top:12px;">
+          <img id="slipPreviewImg" src="" alt="Slip Preview" style="max-height:220px; border-radius:12px; object-fit:contain; border:1px solid var(--border-color); width:100%;">
+          <div style="margin-top:10px;">
+            <button type="button" class="btn btn-danger btn-sm" id="removeSlipBtn" style="font-size:0.8rem; padding:6px 14px;">
+              🗑️ Remove / Delete Current Slip
+            </button>
+          </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-full" style="margin-top:18px;">
-          ✓ Confirm Payment Submission
+        <button type="submit" class="btn btn-primary btn-full" id="paySubmitBtn" style="margin-top:18px;">
+          ✓ Save Payment Submission
         </button>
       </form>
     </div>
@@ -139,7 +144,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <!-- App Scripts -->
-  <script src="js/firebase-config.js?v=3.3.0"></script>
-  <script src="js/app.js?v=3.3.0"></script>
+  <script src="js/firebase-config.js?v=3.4.0"></script>
+  <script src="js/app.js?v=3.4.0"></script>
 </body>
 </html>
