@@ -367,11 +367,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const statusLabels = !isOwnerPage
         ? {
-            paid: 'Paid',
-            pending: 'Pending',
+            paid: '✓ Paid',
+            pending: 'Payment Due',
             overdue: 'Overdue',
             unconfirmed: 'Pending Confirmation',
-            paid_by_owner: 'Owner Paid (Reimburse)'
+            paid_by_owner: 'Paid in Advance by Owner'
           }
         : {
             paid: 'ชำระแล้ว',
@@ -390,6 +390,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const dueLabel = !isOwnerPage ? 'Due Date:' : 'ครบกำหนด:';
       const displayTitle = getDisplayTitle(bill);
 
+      // Special sub-text note for tenant portal
+      let tenantNote = '';
+      if (!isOwnerPage) {
+        if (bill.status === 'paid_by_owner') {
+          tenantNote = `<div class="bill-note" style="border-left-color:#06B6D4; background:rgba(6,182,212,0.08); color:var(--text-primary);">💡 Paid in advance by Landlord. Please reimburse below.</div>`;
+        } else if (bill.status === 'paid') {
+          tenantNote = `<div class="bill-note" style="border-left-color:#10B981; background:rgba(16,185,129,0.08); color:var(--text-primary);">✓ Payment completed and confirmed.</div>`;
+        }
+      }
+
+      const noteContent = bill.note
+        ? `<div class="bill-note">💬 ${bill.note}</div>`
+        : tenantNote;
+
       const card = document.createElement('div');
       card.className = `bill-card type-${bill.type}`;
       card.innerHTML = `
@@ -406,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="bill-status-tag status-${currentStatus}">${statusLabels[currentStatus] || currentStatus}</span>
           </div>
         </div>
-        ${bill.note ? `<div class="bill-note">💬 ${bill.note}</div>` : ''}
+        ${noteContent}
         <div class="bill-actions">${renderCardButtons(bill, isOwnerPage)}</div>
       `;
       billsList.appendChild(card);
