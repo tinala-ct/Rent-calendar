@@ -330,13 +330,14 @@ class DataService {
       );
 
       if (!alreadyExists) {
+        const defaultStatus = template.defaultStatus || 'pending';
         projectedBills.push({
           id: expectedId,
           type: template.type,
           title: template.title,
           amount: Number(template.amount),
           dueDate: dueDate,
-          status: 'pending',
+          status: defaultStatus,
           paidAt: null,
           slipImageUrl: null,
           note: template.note || '',

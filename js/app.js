@@ -366,8 +366,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currentStatus === 'pending' && bill.dueDate < todayStr) currentStatus = 'overdue';
 
       const statusLabels = !isOwnerPage
-        ? { paid: 'Paid', pending: 'Pending', overdue: 'Overdue' }
-        : { paid: 'จ่ายแล้ว', pending: 'รอชำระ', overdue: 'เกินกำหนด' };
+        ? {
+            paid: 'Paid',
+            pending: 'Pending',
+            overdue: 'Overdue',
+            unconfirmed: 'Pending Confirmation',
+            paid_by_owner: 'Owner Paid (Reimburse)'
+          }
+        : {
+            paid: 'ชำระแล้ว',
+            pending: 'รอชำระ',
+            overdue: 'เกินกำหนด',
+            unconfirmed: 'รอสรุปยอด',
+            paid_by_owner: 'เจ้าของสำรองจ่ายแล้ว'
+          };
 
       const scheduledBadge = bill.isScheduled
         ? (!isOwnerPage
@@ -391,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="bill-right">
             <div class="bill-amount">${formatCurrency(bill.amount)}</div>
-            <span class="bill-status-tag status-${currentStatus}">${statusLabels[currentStatus]}</span>
+            <span class="bill-status-tag status-${currentStatus}">${statusLabels[currentStatus] || currentStatus}</span>
           </div>
         </div>
         ${bill.note ? `<div class="bill-note">💬 ${bill.note}</div>` : ''}
@@ -409,12 +421,25 @@ document.addEventListener('DOMContentLoaded', () => {
       if (bill.status === 'paid') {
         if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 View Slip</button>`;
         btns += `<span style="font-size:0.8rem; color:var(--status-paid-text); font-weight:600;">✓ Paid</span>`;
+      } else if (bill.status === 'unconfirmed') {
+        btns += `<span style="font-size:0.8rem; color:#F59E0B; font-weight:600; background:rgba(245,158,11,0.1); padding:4px 8px; border-radius:8px;">⏳ Pending Meter/Bill Confirmation</span>`;
+      } else if (bill.status === 'paid_by_owner') {
+        btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}" style="background-color:#06B6D4;">💳 Reimburse Owner</button>`;
       } else {
         btns += `<button class="btn btn-primary btn-sm btn-pay" data-id="${bill.id}">💳 Submit Payment</button>`;
       }
     } else {
       if (bill.slipImageUrl) btns += `<button class="btn btn-secondary btn-sm btn-view-slip" data-slip="${bill.slipImageUrl}">🔍 ดูสลิป</button>`;
-      if (bill.status !== 'paid') btns += `<button class="btn btn-secondary btn-sm btn-mark-paid" data-id="${bill.id}">✅ ทำเป็นจ่ายแล้ว</button>`;
+      
+      if (bill.status === 'unconfirmed') {
+        btns += `<button class="btn btn-secondary btn-sm btn-edit-bill" data-id="${bill.id}" style="border-color:#F59E0B; color:#F59E0B;">✏️ กรอกยอดเงิน</button>`;
+      } else if (bill.status === 'paid_by_owner') {
+        btns += `<button class="btn btn-secondary btn-sm btn-mark-paid" data-id="${bill.id}" style="background:#06B6D4; color:white; border:none;">✅ ได้รับเงินคืนแล้ว</button>`;
+      } else if (bill.status !== 'paid') {
+        btns += `<button class="btn btn-secondary btn-sm btn-mark-owner-paid" data-id="${bill.id}" style="border-color:#06B6D4; color:#06B6D4;" title="เจ้าของสำรองจ่ายแทนผู้เช่าไปก่อน">💸 สำรองจ่ายแล้ว</button>`;
+        btns += `<button class="btn btn-secondary btn-sm btn-mark-paid" data-id="${bill.id}">✅ ทำเป็นจ่ายแล้ว</button>`;
+      }
+
       btns += `<button class="btn btn-secondary btn-sm btn-edit-bill" data-id="${bill.id}">✏️ แก้ไข</button>`;
       btns += `<button class="btn btn-danger btn-sm btn-delete-bill" data-id="${bill.id}">🗑️</button>`;
     }
@@ -424,13 +449,20 @@ document.addEventListener('DOMContentLoaded', () => {
   function attachBillCardEvents() {
     document.querySelectorAll('.btn-pay').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const id = e.target.getAttribute('data-id');
+        const id = e.currentTarget.getAttribute('data-id');
         activeBillForPay = bills.find(b => b.id === id);
         if (activeBillForPay) {
           const displayTitle = getDisplayTitle(activeBillForPay);
-          document.getElementById('payModalTitle').textContent = !isOwnerPage
-            ? `Submit Payment: ${displayTitle}`
-            : `แจ้งชำระ: ${activeBillForPay.title}`;
+          const isReimburse = activeBillForPay.status === 'paid_by_owner';
+          
+          let headerText = '';
+          if (!isOwnerPage) {
+            headerText = isReimburse ? `Reimburse Owner: ${displayTitle}` : `Submit Payment: ${displayTitle}`;
+          } else {
+            headerText = isReimburse ? `ชำระคืนเจ้าของ: ${activeBillForPay.title}` : `แจ้งชำระ: ${activeBillForPay.title}`;
+          }
+
+          document.getElementById('payModalTitle').textContent = headerText;
           document.getElementById('payModalAmount').textContent = formatCurrency(activeBillForPay.amount);
           slipPreviewContainer.style.display = 'none';
           payModal.classList.add('active');
@@ -448,9 +480,23 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    document.querySelectorAll('.btn-mark-owner-paid').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        const bill = bills.find(b => b.id === id);
+        if (bill) {
+          const billData = { ...bill, status: 'paid_by_owner', paidAt: null };
+          delete billData.isScheduled;
+          await window.dataService.saveBill(billData);
+          showToast('อัปเดตสถานะเป็น "เจ้าของสำรองจ่ายแล้ว" เรียบร้อย');
+          refreshData();
+        }
+      });
+    });
+
     document.querySelectorAll('.btn-mark-paid').forEach(btn => {
       btn.addEventListener('click', async (e) => {
-        const id = e.target.getAttribute('data-id');
+        const id = e.currentTarget.getAttribute('data-id');
         const bill = bills.find(b => b.id === id);
         if (bill) {
           const billData = { ...bill, status: 'paid', paidAt: new Date().toISOString() };
@@ -744,12 +790,14 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('recurringTmplAmount').value = tmpl.amount;
       document.getElementById('recurringTmplDay').value = tmpl.dayOfMonth;
       document.getElementById('recurringTmplFrequency').value = tmpl.frequency;
+      document.getElementById('recurringTmplDefaultStatus').value = tmpl.defaultStatus || 'pending';
       document.getElementById('recurringTmplAnchorMonth').value = tmpl.anchorMonth || 1;
       document.getElementById('recurringTmplNote').value = tmpl.note || '';
       document.getElementById('recurringTmplEnabled').checked = tmpl.enabled !== false;
     } else {
       recurringTemplateForm.reset();
       document.getElementById('recurringTmplId').value = '';
+      document.getElementById('recurringTmplDefaultStatus').value = 'pending';
       document.getElementById('recurringTmplEnabled').checked = true;
     }
     updateAnchorVisibility();
@@ -799,6 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
         amount: parseFloat(document.getElementById('recurringTmplAmount').value) || 0,
         dayOfMonth: Number(document.getElementById('recurringTmplDay').value),
         frequency: document.getElementById('recurringTmplFrequency').value,
+        defaultStatus: document.getElementById('recurringTmplDefaultStatus').value || 'pending',
         anchorMonth: Number(document.getElementById('recurringTmplAnchorMonth').value),
         note: document.getElementById('recurringTmplNote').value,
         enabled: document.getElementById('recurringTmplEnabled').checked

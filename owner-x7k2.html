@@ -135,7 +135,9 @@
           <label>สถานะ</label>
           <select class="form-control" id="billStatusSelect" required>
             <option value="pending">รอชำระ (Pending)</option>
-            <option value="paid">ชำระแล้ว (Paid)</option>
+            <option value="unconfirmed">รอสรุปยอด (Pending Amount Confirmation)</option>
+            <option value="paid_by_owner">เจ้าของสำรองจ่ายแล้ว (Paid by Owner)</option>
+            <option value="paid">ชำระแล้ว / รับเงินคืนแล้ว (Paid)</option>
             <option value="overdue">เกินกำหนด (Overdue)</option>
           </select>
         </div>
@@ -286,6 +288,14 @@
             </select>
           </div>
 
+          <div class="form-group">
+            <label>สถานะเริ่มต้นบิลอัตโนมัติ</label>
+            <select class="form-control" id="recurringTmplDefaultStatus">
+              <option value="pending">รอชำระ (Pending)</option>
+              <option value="unconfirmed">รอสรุปยอด (Pending Confirmation)</option>
+            </select>
+          </div>
+
           <div class="form-group" id="anchorMonthGroup" style="display:none;">
             <label>เดือนอ้างอิง (เดือนแรกที่ต้องชำระ)</label>
             <select class="form-control" id="recurringTmplAnchorMonth">
@@ -372,7 +382,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <!-- App Scripts -->
-  <script src="js/firebase-config.js?v=3.0.0"></script>
-  <script src="js/app.js?v=3.0.0"></script>
+  <script src="js/firebase-config.js?v=3.1.0"></script>
+  <script src="js/app.js?v=3.1.0"></script>
 </body>
 </html>
