@@ -363,7 +363,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     displayBills.forEach(bill => {
       let currentStatus = bill.status;
-      if (currentStatus === 'pending' && bill.dueDate < todayStr) currentStatus = 'overdue';
+      const isZeroOrUnconfirmed = (!bill.amount || Number(bill.amount) === 0 || currentStatus === 'unconfirmed');
+
+      if (isZeroOrUnconfirmed && currentStatus !== 'paid' && currentStatus !== 'paid_by_owner') {
+        currentStatus = 'unconfirmed';
+      } else if (currentStatus === 'pending' && bill.dueDate < todayStr) {
+        currentStatus = 'overdue';
+      }
 
       const statusLabels = !isOwnerPage
         ? {
@@ -390,12 +396,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const dueLabel = !isOwnerPage ? 'Due Date:' : 'ครบกำหนด:';
       const displayTitle = getDisplayTitle(bill);
 
+      // Amount Display Text (If zero or unconfirmed -> show Awaiting Bill / รอบิล)
+      let displayAmount = formatCurrency(bill.amount);
+      if (isZeroOrUnconfirmed && currentStatus === 'unconfirmed') {
+        displayAmount = !isOwnerPage ? 'Awaiting Bill' : 'รอบิล (รอสรุปยอด)';
+      }
+
       // Special sub-text note for tenant portal
       let tenantNote = '';
       if (!isOwnerPage) {
-        if (bill.status === 'paid_by_owner') {
+        if (currentStatus === 'unconfirmed') {
+          tenantNote = `<div class="bill-note" style="border-left-color:#F59E0B; background:rgba(245,158,11,0.08); color:var(--text-primary);">⏳ Amount is being calculated based on actual usage.</div>`;
+        } else if (currentStatus === 'paid_by_owner') {
           tenantNote = `<div class="bill-note" style="border-left-color:#06B6D4; background:rgba(6,182,212,0.08); color:var(--text-primary);">💡 Paid in advance by Landlord. Please reimburse below.</div>`;
-        } else if (bill.status === 'paid') {
+        } else if (currentStatus === 'paid') {
           tenantNote = `<div class="bill-note" style="border-left-color:#10B981; background:rgba(16,185,129,0.08); color:var(--text-primary);">✓ Payment completed and confirmed.</div>`;
         }
       }
@@ -416,12 +430,12 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div class="bill-right">
-            <div class="bill-amount">${formatCurrency(bill.amount)}</div>
+            <div class="bill-amount" style="${isZeroOrUnconfirmed && currentStatus === 'unconfirmed' ? 'font-size:0.9rem; color:#F59E0B;' : ''}">${displayAmount}</div>
             <span class="bill-status-tag status-${currentStatus}">${statusLabels[currentStatus] || currentStatus}</span>
           </div>
         </div>
         ${noteContent}
-        <div class="bill-actions">${renderCardButtons(bill, isOwnerPage)}</div>
+        <div class="bill-actions">${renderCardButtons({ ...bill, status: currentStatus }, isOwnerPage)}</div>
       `;
       billsList.appendChild(card);
     });
@@ -534,6 +548,10 @@ document.addEventListener('DOMContentLoaded', () => {
           document.getElementById('billDueDateInput').value = bill.dueDate;
           document.getElementById('billStatusSelect').value = bill.status;
           document.getElementById('billNoteInput').value = bill.note || '';
+          const billIsVariableCheck = document.getElementById('billIsVariableCheck');
+          if (billIsVariableCheck) {
+            billIsVariableCheck.checked = bill.amount === 0 || bill.status === 'unconfirmed';
+          }
           document.getElementById('billModalTitle').textContent = 'แก้ไขรายการบิล';
           billModal.classList.add('active');
         }
@@ -808,11 +826,15 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('recurringTmplAnchorMonth').value = tmpl.anchorMonth || 1;
       document.getElementById('recurringTmplNote').value = tmpl.note || '';
       document.getElementById('recurringTmplEnabled').checked = tmpl.enabled !== false;
+      const recVarCheck = document.getElementById('recurringTmplIsVariableCheck');
+      if (recVarCheck) recVarCheck.checked = tmpl.amount === 0 || tmpl.defaultStatus === 'unconfirmed';
     } else {
       recurringTemplateForm.reset();
       document.getElementById('recurringTmplId').value = '';
       document.getElementById('recurringTmplDefaultStatus').value = 'pending';
       document.getElementById('recurringTmplEnabled').checked = true;
+      const recVarCheck = document.getElementById('recurringTmplIsVariableCheck');
+      if (recVarCheck) recVarCheck.checked = false;
     }
     updateAnchorVisibility();
   }
@@ -872,6 +894,50 @@ document.addEventListener('DOMContentLoaded', () => {
       if (recurringFormView) recurringFormView.style.display = 'none';
       refreshData();
       showToast('บันทึกรายการประจำเรียบร้อยแล้ว');
+    });
+  }
+
+  // ─── Variable Bill Helper Checkboxes ─────────────────────────────────────
+
+  const billIsVariableCheck = document.getElementById('billIsVariableCheck');
+  const billAmountInput = document.getElementById('billAmountInput');
+  const billStatusSelect = document.getElementById('billStatusSelect');
+
+  if (billIsVariableCheck && billAmountInput && billStatusSelect) {
+    billIsVariableCheck.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        billAmountInput.value = '0';
+        billStatusSelect.value = 'unconfirmed';
+      }
+    });
+    billAmountInput.addEventListener('input', (e) => {
+      if (parseFloat(e.target.value) > 0) {
+        billIsVariableCheck.checked = false;
+        if (billStatusSelect.value === 'unconfirmed') {
+          billStatusSelect.value = 'pending';
+        }
+      }
+    });
+  }
+
+  const recurringTmplIsVariableCheck = document.getElementById('recurringTmplIsVariableCheck');
+  const recurringTmplAmount = document.getElementById('recurringTmplAmount');
+  const recurringTmplDefaultStatus = document.getElementById('recurringTmplDefaultStatus');
+
+  if (recurringTmplIsVariableCheck && recurringTmplAmount && recurringTmplDefaultStatus) {
+    recurringTmplIsVariableCheck.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        recurringTmplAmount.value = '0';
+        recurringTmplDefaultStatus.value = 'unconfirmed';
+      }
+    });
+    recurringTmplAmount.addEventListener('input', (e) => {
+      if (parseFloat(e.target.value) > 0) {
+        recurringTmplIsVariableCheck.checked = false;
+        if (recurringTmplDefaultStatus.value === 'unconfirmed') {
+          recurringTmplDefaultStatus.value = 'pending';
+        }
+      }
     });
   }
 
