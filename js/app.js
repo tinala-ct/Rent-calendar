@@ -6,8 +6,9 @@
 document.addEventListener('DOMContentLoaded', () => {
   const isOwnerPage = window.location.pathname.includes('owner-x7k2');
 
-  // State
-  let currentDate = new Date(2026, 7, 1); // Aug 2026
+  // State — Automatically default to current real-world year and month
+  const now = new Date();
+  let currentDate = new Date(now.getFullYear(), now.getMonth(), 1);
   let bills = [];
   let selectedDate = null;
   let activeBillForPay = null;
